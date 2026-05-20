@@ -54,35 +54,52 @@ void keypad_init_pins()
 
 void keypad_init_timer()
 {
-    uint32_t delay_us_alarm0 = 1 * 1000000;
-    // Enable the interrupt for our alarm (the timer outputs 4 alarm irqs)
-    hw_set_bits(&timer_hw->inte, 1u << 0);
-    // Set irq handler for alarm irq
-    irq_set_exclusive_handler(TIMER0_IRQ_0, keypad_drive_column);
-    // Enable the alarm irq
-    irq_set_enabled(TIMER0_IRQ_0, true);
-    uint64_t target_alarm0 = timer_hw->timerawl + delay_us_alarm0;
-    // Write the lower 32 bits of the target time to the alarm which
-    timer_hw->alarm[0] = (uint32_t)target_alarm0;
+    // ==========================================
+    // KEYPAD STEP 1: DRIVE COLUMN (Using Alarm 2)
+    // ==========================================
+    uint32_t delay_us_alarm2 = 1 * 1000000; // 1 second
+    
+    // Clear any leftover interrupt flags on Alarm 2
+    timer_hw->intr = 1u << 2;
+    
+    // Enable the interrupt for hardware Alarm 2
+    hw_set_bits(&timer_hw->inte, 1u << 2);
+    
+    // Set irq handler for Alarm 2 vector
+    irq_set_exclusive_handler(TIMER0_IRQ_2, keypad_drive_column);
+    irq_set_enabled(TIMER0_IRQ_2, true);
+    
+    // Set the target time execution
+    uint64_t target_alarm2 = timer_hw->timerawl + delay_us_alarm2;
+    timer_hw->alarm[2] = (uint32_t)target_alarm2;
 
-    uint32_t delay_us_alarm1 = 1.1 * 1000000;
-    // Enable the interrupt for our alarm (the timer outputs 4 alarm irqs)
-    hw_set_bits(&timer_hw->inte, 1u << 1);
-    // Set irq handler for alarm irq
-    irq_set_exclusive_handler(TIMER0_IRQ_1, keypad_isr);
-    // Enable the alarm irq
-    irq_set_enabled(TIMER0_IRQ_1, true);
-    uint64_t target_alarm1 = timer_hw->timerawl + delay_us_alarm1;
-    // Write the lower 32 bits of the target time to the alarm which
-    timer_hw->alarm[1] = (uint32_t)target_alarm1;
+
+    // ==========================================
+    // KEYPAD STEP 2: READ ROW ISR (Using Alarm 3)
+    // ==========================================
+    uint32_t delay_us_alarm3 = 1.1 * 1000000; // 1.1 seconds
+    
+    // Clear any leftover interrupt flags on Alarm 3
+    timer_hw->intr = 1u << 3;
+    
+    // Enable the interrupt for hardware Alarm 3
+    hw_set_bits(&timer_hw->inte, 1u << 3);
+    
+    // Set irq handler for Alarm 3 vector
+    irq_set_exclusive_handler(TIMER0_IRQ_3, keypad_isr);
+    irq_set_enabled(TIMER0_IRQ_3, true);
+    
+    // Set the target time execution
+    uint64_t target_alarm3 = timer_hw->timerawl + delay_us_alarm3;
+    timer_hw->alarm[3] = (uint32_t)target_alarm3;
 }
 
 void keypad_drive_column()
 {
-    // acknowledge the interrupt for ALARM0 on TIMER0
+    // acknowledge the interrupt for ALARM2 on TIMER0
     // uint32_t result =
     // timer0_hw->intr =
-    hw_clear_bits(&timer_hw->intr, 1u << 0);
+    hw_clear_bits(&timer_hw->intr, 1u << 2);
     // set the columns from 6-9
     col++;
     col = (col) % 4;
@@ -103,7 +120,7 @@ void keypad_drive_column()
 
     uint32_t delay_us_alarm0 = 25 * 1000;
     uint64_t target_alarm0 = timer_hw->timerawl + delay_us_alarm0;
-    timer_hw->alarm[0] = (uint32_t)target_alarm0;
+    timer_hw->alarm[2] = (uint32_t)target_alarm0;
 }
 
 uint8_t keypad_read_rows()
@@ -121,8 +138,8 @@ uint16_t ascii_to_bin(int set_bit, char key)
 
 void keypad_isr()
 {
-    // acknowledge the interrupt for ALARM1 on TIMER0
-    hw_clear_bits(&timer_hw->intr, 1u << 1);
+    // acknowledge the interrupt for ALARM3 on TIMER0
+    hw_clear_bits(&timer_hw->intr, 1u << 3);
 
     // Get the current row pin values by calling keypad_read_rows
     uint8_t row = keypad_read_rows();
@@ -158,5 +175,5 @@ void keypad_isr()
     }
     uint32_t delay_us_alarm0 = 25 * 1000;
     uint64_t target_alarm0 = timer_hw->timerawl + delay_us_alarm0;
-    timer_hw->alarm[1] = (uint32_t)target_alarm0;
+    timer_hw->alarm[3] = (uint32_t)target_alarm0;
 }

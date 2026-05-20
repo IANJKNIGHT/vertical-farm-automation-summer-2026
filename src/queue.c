@@ -1,5 +1,4 @@
 #include "queue.h"
-
 KeyEvents kev = {.q = {0}, .head = 0, .tail = 0};
 
 uint16_t key_pop()

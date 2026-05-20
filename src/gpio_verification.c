@@ -1,3 +1,4 @@
+#include "queue.h"
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/timer.h"
@@ -158,78 +159,45 @@ void start_new_blink_sequence() {
     timer_hw->alarm[ALARM_NUM0] = timer_hw->timerawl + 50; 
 }
 
-void state_machine_handler()
-
+void state_machine_handler(uint gpio, uint32_t events)
 {
-
-    uint32_t manual_result = gpio_get_irq_event_mask(col_gpio_trigger_for_manual_mode);
-
-    if ((manual_result & GPIO_IRQ_EDGE_RISE) && (system_timer_state == MODE_MANUAL_ADJUST))
-
+    // Check if the manual mode trigger fired
+    if (gpio == col_gpio_trigger_for_manual_mode && (events & GPIO_IRQ_EDGE_RISE))
     {
-
-        // uint32_t gpio_state = sio_hw->gpio_in;
-
-        uint32_t led_mask = ((1 << 22) | (1 << 23) | (1 << 24) | (1 << 25));
-
-        // int32_t mask = 1u << (led_mask & 0x1fu);
-
-        sio_hw->gpio_set = led_mask;
-
-        // sio_hw->gpio_clr = led_mask; // Clear all LEDs
-
-        // sio_hw->gpio_out |= (gpio_state & led_mask); // Set LEDs according to GPIO state
-
-        // sio_hw->gpio_oe_set = led_mask;
-
-        // sio_hw->gpio_clr = led_mask;
-
-    }
-
-    // if enter state is first_press, blink the LED once
-
-    if ((gpio_get_irq_event_mask(col_gpio_trigger_for_enter_time) & GPIO_IRQ_EDGE_RISE) && (key_char == '#'))
-
-    {
-
-        switch (system_timer_state)
-
+        if (system_timer_state == MODE_MANUAL_ADJUST)
         {
-
-        case ENTER_DAYS:
-
-            sio_hw->gpio_set = (1 << 22); // Turn on LED for ENTER_DAYS
-
-            break;
-
-        case ENTER_HOURS:
-
-            sio_hw->gpio_set = (1 << 23); // Turn on LED for ENTER_HOURS
-
-            break;
-
-        case ENTER_MINUTES:
-
-            sio_hw->gpio_set = (1 << 24); // Turn on LED for ENTER_MINUTES
-
-            break;
-
-        case ENTER_SECONDS:
-
-            sio_hw->gpio_set = (1 << 25); // Turn on LED for ENTER_SECONDS
-
-            break;
-
+            uint32_t led_mask = ((1 << 22) | (1 << 23) | (1 << 24) | (1 << 25));
+            sio_hw->gpio_set = led_mask;
         }
-
     }
 
+    // Check if the timed run trigger fired
+    if (gpio == col_gpio_trigger_for_enter_time && (events & GPIO_IRQ_EDGE_RISE))
+    {
+        if (key_char == '#')
+        {
+            switch (system_timer_state)
+            {
+            case ENTER_DAYS:
+                sio_hw->gpio_set = (1 << 22);
+                break;
+            case ENTER_HOURS:
+                sio_hw->gpio_set = (1 << 23);
+                break;
+            case ENTER_MINUTES:
+                sio_hw->gpio_set = (1 << 24);
+                break;
+            case ENTER_SECONDS:
+                sio_hw->gpio_set = (1 << 25);
+                break;
+            default:
+                break;
+            }
+        }
+    }
 
-
-    gpio_acknowledge_irq(col_gpio_trigger_for_manual_mode, GPIO_IRQ_EDGE_RISE);
-
-    gpio_acknowledge_irq(col_gpio_trigger_for_enter_time, GPIO_IRQ_EDGE_  RISE);
-
+    // NOTE: You do NOT need to call gpio_acknowledge_irq() here. 
+    // The SDK master handler clears the interrupt flag for you automatically when this callback finishes!
 }
 
 
@@ -266,18 +234,7 @@ void init_state_machine_led()
 
     // Set the interrupt handler for our source trigger pin
 
-    gpio_add_raw_irq_handler_masked(1u << col_gpio_trigger_for_manual_mode, state_machine_handler);
-
-    gpio_add_raw_irq_handler_masked(1u << col_gpio_trigger_for_enter_time, state_machine_handler);
-
-
-
-    // Acknowledge any boot-up noise on the trigger pin safely
-
-    gpio_acknowledge_irq(col_gpio_trigger_for_manual_mode, GPIO_IRQ_EDGE_RISE);
-
-    gpio_acknowledge_irq(col_gpio_trigger_for_enter_time, GPIO_IRQ_EDGE_RISE);
-
+    gpio_set_irq_callback(&state_machine_handler);
 
 
     // Turn on global IO interrupts and enable the specific pin edge
@@ -290,60 +247,3 @@ void init_state_machine_led()
 
 }
 
-
-
-void init_state_machine_led()
-
-{
-
-    for (int gpio = 22; gpio <= 25; gpio++)
-
-    {
-
-        uint32_t mask = 1u << (gpio & 0x1fu);
-
-        sio_hw->gpio_oe_set = mask;
-
-        sio_hw->gpio_clr = mask;
-
-
-
-        hw_write_masked(&pads_bank0_hw->io[gpio],
-
-                        PADS_BANK0_GPIO0_IE_BITS,
-
-                        PADS_BANK0_GPIO0_IE_BITS | PADS_BANK0_GPIO0_OD_BITS);
-
-        io_bank0_hw->io[gpio].ctrl = GPIO_FUNC_SIO << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
-
-        hw_clear_bits(&pads_bank0_hw->io[gpio], PADS_BANK0_GPIO0_ISO_BITS);
-
-    }
-
-    // Set the interrupt handler for GPIO 22-25 to manual_mode_adjust_led_handler
-
-    // Set the interrupt handler for our source trigger pin
-
-    gpio_add_raw_irq_handler_masked(1u << col_gpio_trigger_for_manual_mode, state_machine_handler);
-
-    gpio_add_raw_irq_handler_masked(1u << col_gpio_trigger_for_enter_time, state_machine_handler);
-
-
-
-    // Acknowledge any boot-up noise on the trigger pin safely
-
-    gpio_acknowledge_irq(col_gpio_trigger_for_manual_mode, GPIO_IRQ_EDGE_RISE);
-
-    gpio_acknowledge_irq(col_gpio_trigger_for_enter_time, GPIO_IRQ_EDGE_RISE);
-
-
-
-    // Turn on global IO interrupts and enable the specific pin edge
-
-    irq_set_enabled(IO_IRQ_BANK0, true);
-
-    gpio_set_irq_enabled(col_gpio_trigger_for_manual_mode, GPIO_IRQ_EDGE_RISE, true);
-
-    gpio_set_irq_enabled(col_gpio_trigger_for_enter_time, GPIO_IRQ_EDGE_RISE, true);
-
-}
