@@ -1,0 +1,1 @@
+I'm confused on how I should I call this inside of main.c. Next, could you give me a run down of all the important lessons that I learned recently (like how to program interrupts, understanding why there were timing issues with ? Finally, do you think this would a good time to update the READ

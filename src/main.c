@@ -19,6 +19,7 @@ uint16_t master_buffer2[MASTER_BUFFER_SIZE];
 
 uint16_t adc_fan_speed_control[NUM_SAMPLES];
 uint16_t adc_duty_cycle_result[NUM_SAMPLES];
+int second_press_blink_count = 0;
 
 int dma_master_chan;
 int duty_cycle = 50; // Default to 50% duty cycle until we read the ADC
@@ -390,7 +391,6 @@ int main()
     init_pwm_irq();
     keypad_init_pins();
     keypad_init_timer();
-    init_state_machine_led();
     bool enter_manual_mode_message_sent = false;
     bool enter_days_input_message_sent = false;
     bool enter_hours_input_message_sent = false;
@@ -399,11 +399,15 @@ int main()
 
     // Initialize your pins using your existing hardware setup function
     init_adc_combined_freerun();
+    init_state_machine_led();
+    init_set_time();
+    init_timer_subsystem(); // Configures Alarm 0 and registers handler
+    
+    // 3. Claim the master DMA channel from the system pool
+    dma_master_chan = dma_claim_unused_channel(true);
 
-    // CRITICAL: Force turn off Free-Run Mode and Round-Robin
-    // We want to manually poll the registers ourselves
-
-    int dma_master_chan = dma_claim_unused_channel(true);
+    // 4. Synchronize and Kick Off Background Tasks
+    // This starts the DMA channel first, then releases the ADC clock loop
     start_synchronized_adc_dma();
     for (;;)
     {
