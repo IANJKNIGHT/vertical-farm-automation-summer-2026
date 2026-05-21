@@ -60,8 +60,8 @@ void keypad_init_pins();
 void keypad_init_timer();
 void start_new_blink_sequence();
 void start_synchronized_adc_dma();
-uint32_t enter_timed_run_first_state();
-uint32_t enter_timed_run_second_state();
+uint32_t enter_timed_run_first_state(enum SystemTimerState state, uint16_t key_event);
+uint32_t enter_timed_run_second_state(enum SystemTimerState state, uint16_t key_event);
 // ///////////////////////////////////////////////////////////////////
 
 
@@ -84,7 +84,7 @@ int main()
     keypad_init_pins();
     keypad_init_timer();
     init_state_machine_led();
-     // Starts up the Alarm 0 infrastructure safely
+    init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
     init_pwm_irq();
     
     
@@ -108,30 +108,34 @@ int main()
             system_timer_state = MODE_MANUAL_ADJUST;
             mode_switch_time_remaining_to_set = get_absolute_time();
         }
-        else if (key_char == '#' && system_timer_state == MODE_MANUAL_ADJUST && key_event != 0)
+        else if (key_char == '#' && system_timer_state == MODE_MANUAL_ADJUST)
         {
             system_timer_state = ENTER_DAYS;
+            enter_state = FIRST_PRESS;
             set_duty = adc_fan_speed_control[0] * 100 / 4095;
             
             // Explicitly force the hardware timer to update to the first press pattern
+            start_new_blink_sequence(); 
         }
 
         // Handle sequential inputs using clean state segregation
         switch (system_timer_state)
         {
             case ENTER_DAYS:
-                if (key_event != 0)
+                if (enter_state == FIRST_PRESS)
                 {
-                    if (enter_state == NO_ENTRY)
-                    {
-                        remaining_seconds = enter_timed_run_first_state();
-                    }
-                    else if (enter_state == FIRST_PRESS)
-                    {
-                        remaining_seconds = 24*3600*(remaining_seconds*10 + enter_timed_run_second_state(system_timer_state));
-                    }                    
+                    remaining_seconds = enter_timed_run_first_state(system_timer_state, key_event);
                 }
-                start_new_blink_sequence(); // Keep the pattern in sync even if no new key events come in               
+                else if (enter_state == SECOND_PRESS && key_event != 0)
+                {
+                    remaining_seconds = enter_timed_run_second_state(system_timer_state, key_event);
+                    remaining_seconds *= 24 * 3600; // Convert to seconds
+                    
+                    // ONLY advance out of this state when the second press has completely finished processing
+                    system_timer_state = ENTER_HOURS;
+                    enter_state = FIRST_PRESS; 
+                    start_new_blink_sequence();
+                }
                 break;
 
             case ENTER_HOURS:

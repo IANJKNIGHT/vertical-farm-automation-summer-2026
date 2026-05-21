@@ -332,56 +332,58 @@ void init_state_machine_led()
     irq_set_enabled(IO_IRQ_BANK0, true);
 }
 
-int enter_timed_run_first_state() 
+int enter_timed_run_first_state(enum SystemTimerState state, uint16_t key_event) 
 {
-    switch (key_char)
+    if (key_event != 0)
     {
-    case '0' ... '9':
-        remaining_seconds = 10 * (key_char - '0');
-        enter_state = FIRST_PRESS;
-        start_new_blink_sequence();   // 3. Force the timer to instantly adapt to the new pattern
-        break;
-    default:
-        
-        enter_state = FIRST_PRESS;
-        break;
-    }    
+        char local_char = (char)(key_event & 0xFF);
+        switch (local_char)
+        {
+        case '0' ... '9':
+            remaining_seconds = 10 * (local_char - '0');
+            key_char = local_char;        // 1. Update the shared global char for the LEDs
+            enter_state = SECOND_PRESS;   // 2. Advance the state
+            start_new_blink_sequence();   // 3. Force the timer to instantly adapt to the new pattern
+            break;
+        default:
+            
+            enter_state = FIRST_PRESS;
+            break;
+        }
+    }
     return remaining_seconds;
 }
 
-int enter_timed_run_second_state() // fill in
+int enter_timed_run_second_state(enum SystemTimerState state, uint16_t key_event) // fill in
 {
-    
-    switch (key_char)
+    if (key_event != 0)
     {
-    case '0' ... '9':
-        remaining_seconds += (key_char - '0');
-        enter_state = SECOND_PRESS;
-        break;
-    case 'C':
-        // Clear the entry
-        remaining_seconds = 0;
-        enter_state = FIRST_PRESS;
-        break;
-    default:
-        enter_state = SECOND_PRESS;
+        key_char = (char)(key_event & 0xFF);
+        switch (key_char)
+        {
+        case '0' ... '9':
+            remaining_seconds += (key_char - '0');
+            break;
+        case 'C':
+            // Clear the entry
+            remaining_seconds = 0;
+            enter_state = FIRST_PRESS;
+            break;
+        default:
+            enter_state = SECOND_PRESS;
+        }
     }
-    
-    if (enter_state == ENTER_HOURS && remaining_seconds > 23)
+    if (state == ENTER_HOURS && remaining_seconds > 23)
     {
         // printf("Invalid hours input. Please enter a value between 0 and 23.\n");
         remaining_seconds = 0;
         enter_state = FIRST_PRESS;
     }
-    else if ((enter_state == ENTER_MINUTES || enter_state == ENTER_SECONDS) && remaining_seconds > 59)
+    if ((state == ENTER_MINUTES || state == ENTER_SECONDS) && remaining_seconds > 59)
     {
+        // printf("Invalid minutes input. Please enter a value between 0 and 59.\n");
         remaining_seconds = 0;
         enter_state = FIRST_PRESS;
     }
-    else 
-    {
-        start_new_blink_sequence();   // 3. Force the timer to instantly adapt to the new pattern
-    }
-    
     return remaining_seconds;
 }
