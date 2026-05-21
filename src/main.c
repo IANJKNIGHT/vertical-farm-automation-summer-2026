@@ -52,79 +52,19 @@ enum EnterState
 };
 enum EnterState enter_state = NO_ENTRY;
 
-void display_init_pins();
-void display_init_timer();
-void measure_duty_cycle_period(uint16_t *adc_result, int *duty_period);
-void display_char_print(const char *buffer);
-void start_synchronized_adc_dma();
-void manual_mode_adjust_led_handler();
-void init_set_time();
-void init_timer_subsystem();
-extern void init_adc_combined_freerun();
-// void init_master_dma();
+void init_adc_combined_freerun();
+void init_state_machine_led();
+void init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
 void init_pwm_irq();
-
-extern void init_adc_read_pwm_freerun();
-extern void keypad_init_pins();
-extern void keypad_init_timer();
-extern uint16_t key_pop();
-extern void init_set_mode();
+void keypad_init_pins();
+void keypad_init_timer();
+void start_new_blink_sequence();
+void start_synchronized_adc_dma();
+uint32_t enter_timed_run_first_state();
+uint32_t enter_timed_run_second_state();
 // ///////////////////////////////////////////////////////////////////
 
-int enter_timed_run_first_state(enum SystemTimerState state, uint16_t key_event) 
-{
-    while (key_event != 0)
-    {
-        char local_char = (char)(key_event & 0xFF);
-        switch (local_char)
-        {
-        case '0' ... '9':
-            remaining_seconds = 10 * (local_char - '0');
-            key_char = local_char;        // 1. Update the shared global char for the LEDs
-            enter_state = SECOND_PRESS;   // 2. Advance the state
-            start_new_blink_sequence();   // 3. Force the timer to instantly adapt to the new pattern
-            break;
-        default:
-            printf("Invalid key press...\n");
-            enter_state = FIRST_PRESS;
-        }
-    }
-    return remaining_seconds;
-}
 
-int enter_timed_run_second_state(enum SystemTimerState state, uint16_t key_event) // fill in
-{
-    while (key_event != 0)
-    {
-        char key_char = (char)(key_event & 0xFF);
-        switch (key_char)
-        {
-        case '0' ... '9':
-            remaining_seconds += (key_char - '0');
-            break;
-        case 'C':
-            // Clear the entry
-            remaining_seconds = 0;
-            enter_state = FIRST_PRESS;
-            break;
-        default:
-            enter_state = SECOND_PRESS;
-        }
-    }
-    if (state == ENTER_HOURS && remaining_seconds > 23)
-    {
-        printf("Invalid hours input. Please enter a value between 0 and 23.\n");
-        remaining_seconds = 0;
-        enter_state = FIRST_PRESS;
-    }
-    if ((state == ENTER_MINUTES || state == ENTER_SECONDS) && remaining_seconds > 59)
-    {
-        printf("Invalid minutes input. Please enter a value between 0 and 59.\n");
-        remaining_seconds = 0;
-        enter_state = FIRST_PRESS;
-    }
-    return remaining_seconds;
-}
 
 
 
@@ -141,12 +81,12 @@ int main()
     
     // 1. Hardware & Driver Initializations
     init_adc_combined_freerun();
-    init_state_machine_led();
-    init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
-    init_pwm_irq();
     keypad_init_pins();
     keypad_init_timer();
-    init_timer_subsystem(); // Configures Alarm 0 and registers handler
+    init_state_machine_led();
+     // Starts up the Alarm 0 infrastructure safely
+    init_pwm_irq();
+    
     
     // 3. Claim the master DMA channel from the system pool
     dma_master_chan = dma_claim_unused_channel(true);
@@ -163,30 +103,43 @@ int main()
         }
 
         // ... Keep your state logic here, but let's fix the ADC print below ...
-        if (key_char == 'A')
+        if (key_char == 'A' && system_timer_state == MODE_DEFAULT)
         {
             system_timer_state = MODE_MANUAL_ADJUST;
             mode_switch_time_remaining_to_set = get_absolute_time();
         }
-        if (key_char == '#' && system_timer_state == MODE_MANUAL_ADJUST)
+        else if (key_char == '#' && system_timer_state == MODE_MANUAL_ADJUST && key_event != 0)
         {
             system_timer_state = ENTER_DAYS;
-            enter_state = FIRST_PRESS;
             set_duty = adc_fan_speed_control[0] * 100 / 4095;
+            
+            // Explicitly force the hardware timer to update to the first press pattern
         }
-        if (system_timer_state == ENTER_DAYS)
-        {
-            if (enter_state == FIRST_PRESS)
-            {
-                remaining_seconds = enter_timed_run_first_state(system_timer_state, key_event);
-            }
-            if (enter_state == SECOND_PRESS)
-            {
 
-                remaining_seconds = enter_timed_run_second_state(system_timer_state, key_event);
-                remaining_seconds *= 24 * 3600; // Convert days to seconds
-            }
-            system_timer_state = ENTER_HOURS;
+        // Handle sequential inputs using clean state segregation
+        switch (system_timer_state)
+        {
+            case ENTER_DAYS:
+                if (key_event != 0)
+                {
+                    if (enter_state == NO_ENTRY)
+                    {
+                        remaining_seconds = enter_timed_run_first_state();
+                    }
+                    else if (enter_state == FIRST_PRESS)
+                    {
+                        remaining_seconds = 24*3600*(remaining_seconds*10 + enter_timed_run_second_state(system_timer_state));
+                    }                    
+                }
+                start_new_blink_sequence(); // Keep the pattern in sync even if no new key events come in               
+                break;
+
+            case ENTER_HOURS:
+                // Your hours logic block goes safely here without bleed-through...
+                break;
+
+            default:
+                break;
         }
         if (master_buffer_ready)
         {
