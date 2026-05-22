@@ -1,0 +1,4 @@
+flash_mem_arr_addresses = [[ Slot 0 ] [ Slot 1 ] [ Slot 2 ] [ Slot 3 ] [ Slot 4 ]]
+for (int i = 0; i<=4; i++)
+{
+	

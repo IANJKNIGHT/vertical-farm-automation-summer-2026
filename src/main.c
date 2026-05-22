@@ -27,10 +27,18 @@ int duty_cycle = 50; // Default to 50% duty cycle until we read the ADC
 int set_duty = 0;
 int current_buffer = 1;
 char key_char = '\0';
+uint16_t num_entered = '\0';
+uint16_t key_event = 0;
+int key_event_count = 0;
+
 volatile uint16_t *completed_raw_buffer;
 absolute_time_t mode_switch_time_remaining_to_set;
 
-uint32_t remaining_seconds = 0;
+int remaining_seconds = 0;
+int remaining_days = 0;
+int remaining_hours = 0;
+int remaining_minutes = 0;
+int remaining_seconds_seconds = 0;
 
 volatile bool master_buffer_ready = false; // Flag to indicate a master buffer is full and ready for processing
 enum SystemTimerState
@@ -60,13 +68,9 @@ void keypad_init_pins();
 void keypad_init_timer();
 void start_new_blink_sequence();
 void start_synchronized_adc_dma();
-uint32_t enter_timed_run_first_state(enum SystemTimerState state, uint16_t key_event);
-uint32_t enter_timed_run_second_state(enum SystemTimerState state, uint16_t key_event);
+uint32_t enter_timed_run_first_state();
+uint32_t enter_timed_run_second_state();
 // ///////////////////////////////////////////////////////////////////
-
-
-
-
 
 // Bring in your existing init function
 
@@ -77,8 +81,9 @@ int main()
     // Wait 3 seconds after boot so you can open your serial monitor in time
     sleep_ms(3000);
     absolute_time_t mode_switch_time_remaining_to_set;
+    absolute_time_t last_key_press_time = get_absolute_time();
     // int duty_period[2];
-    
+
     // 1. Hardware & Driver Initializations
     init_adc_combined_freerun();
     keypad_init_pins();
@@ -86,8 +91,7 @@ int main()
     init_state_machine_led();
     init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
     init_pwm_irq();
-    
-    
+
     // 3. Claim the master DMA channel from the system pool
     dma_master_chan = dma_claim_unused_channel(true);
 
@@ -96,10 +100,17 @@ int main()
     start_synchronized_adc_dma();
     for (;;)
     {
-        uint16_t key_event = key_pop();
-        if (key_event != 0)
+        key_event = key_pop();
+        if (key_event != 0 ) // 50ms && absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 50000
         {
+
+            last_key_press_time = get_absolute_time();
             key_char = (char)(key_event & 0xFF);
+        }
+        else
+        {
+            key_event = 0; // Clear the key char if no new event to prevent accidental processing
+            key_char = '\0';
         }
 
         // ... Keep your state logic here, but let's fix the ADC print below ...
@@ -108,42 +119,130 @@ int main()
             system_timer_state = MODE_MANUAL_ADJUST;
             mode_switch_time_remaining_to_set = get_absolute_time();
         }
-        else if (key_char == '#' && system_timer_state == MODE_MANUAL_ADJUST)
+        else if (key_char == '#' && system_timer_state == MODE_MANUAL_ADJUST && key_event != 0)
         {
             system_timer_state = ENTER_DAYS;
-            enter_state = FIRST_PRESS;
             set_duty = adc_fan_speed_control[0] * 100 / 4095;
-            
+            key_event = 0; // Clear the key event to prevent accidental processing in the new state
             // Explicitly force the hardware timer to update to the first press pattern
-            start_new_blink_sequence(); 
+            // start_new_blink_sequence();
         }
 
         // Handle sequential inputs using clean state segregation
+        if (key_char == '#' && key_event != 0 && (system_timer_state == ENTER_DAYS || system_timer_state == ENTER_HOURS || system_timer_state == ENTER_MINUTES))
+        {
+            switch (system_timer_state)
+            {
+            case ENTER_DAYS:
+                system_timer_state = ENTER_HOURS;
+                break;
+            case ENTER_HOURS:
+                system_timer_state = ENTER_MINUTES;
+                break;
+            case ENTER_MINUTES:
+                system_timer_state = ENTER_SECONDS;
+                break;
+            }
+            key_event = 0; // Clear the key event to prevent accidental processing in the new state
+            system_timer_state = NO_ENTRY;
+        }
         switch (system_timer_state)
         {
-            case ENTER_DAYS:
-                if (enter_state == FIRST_PRESS)
+        case MODE_MANUAL_ADJUST:
+            break;
+        case MODE_DEFAULT:
+            break;
+        case ENTER_DAYS:
+            
+            if (key_event != 0)
+            {
+                if (enter_state == NO_ENTRY)
                 {
-                    remaining_seconds = enter_timed_run_first_state(system_timer_state, key_event);
+                    // printf("\n");
+                    // printf("Entered no entry\n");
+                    remaining_days = enter_timed_run_first_state();
                 }
-                else if (enter_state == SECOND_PRESS && key_event != 0)
+                else if (enter_state == FIRST_PRESS)
                 {
-                    remaining_seconds = enter_timed_run_second_state(system_timer_state, key_event);
-                    remaining_seconds *= 24 * 3600; // Convert to seconds
-                    
+                    remaining_days = (remaining_days * 10 + enter_timed_run_second_state());
+                    remaining_seconds += 3600 * 24 * remaining_days;
                     // ONLY advance out of this state when the second press has completely finished processing
-                    system_timer_state = ENTER_HOURS;
-                    enter_state = FIRST_PRESS; 
+
                     start_new_blink_sequence();
                 }
-                break;
-
-            case ENTER_HOURS:
-                // Your hours logic block goes safely here without bleed-through...
-                break;
-
-            default:
-                break;
+                key_event = 0; // Clear the key event to prevent accidental processing in the new state
+            }
+            else
+            {
+                start_new_blink_sequence(); // Ensure we update the pattern immediately if a non-numeric key is pressed
+            }
+            // Ensure the timer pattern updates immediately on the first press
+            break;
+        case ENTER_HOURS:
+            if (key_event != 0)
+            {
+                if (enter_state == NO_ENTRY)
+                {
+                    remaining_hours = enter_timed_run_first_state(system_timer_state, key_event);
+                }
+                else if (enter_state == FIRST_PRESS)
+                {
+                    remaining_hours = (remaining_hours * 10 + enter_timed_run_second_state(system_timer_state, key_event));
+                    remaining_seconds += 3600 * remaining_hours;
+                    // ONLY advance out of this state when the second press has completely finished processing
+                    start_new_blink_sequence();
+                }
+                key_event = 0; // Clear the key event to prevent accidental processing in the new state
+            }
+            else
+            {
+                start_new_blink_sequence(); // Ensure we update the pattern immediately if a non-numeric key is pressed
+            }
+            // Ensure the timer pattern updates immediately on the first press
+            break;
+        case ENTER_MINUTES:
+            if (key_event != 0)
+            {
+                if (enter_state == NO_ENTRY)
+                {
+                    remaining_minutes = enter_timed_run_first_state(system_timer_state, key_event);
+                }
+                else if (enter_state == FIRST_PRESS)
+                {
+                    remaining_minutes = (remaining_minutes * 10 + enter_timed_run_second_state(system_timer_state, key_event));
+                    remaining_seconds += 60 * remaining_minutes;
+                    // ONLY advance out of this state when the second press has completely finished processing
+                    start_new_blink_sequence();
+                }
+                key_event = 0; // Clear the key event to prevent accidental processing in the new state
+            }
+            else
+            {
+                start_new_blink_sequence(); // Ensure we update the pattern immediately if a non-numeric key is pressed
+            }
+            // Ensure the timer pattern updates immediately on the first press
+            break;
+        case ENTER_SECONDS:
+            if (key_event != 0)
+            {
+                if (enter_state == FIRST_PRESS)
+                {
+                    remaining_seconds_seconds = enter_timed_run_first_state(system_timer_state, key_event);
+                }
+                else if (enter_state == SECOND_PRESS)
+                {
+                    remaining_seconds_seconds = (remaining_seconds_seconds * 10 + enter_timed_run_second_state(system_timer_state, key_event));
+                    remaining_seconds += remaining_seconds_seconds;
+                    start_new_blink_sequence();
+                }
+                key_event = 0; // Clear the key event to prevent accidental processing in the new state
+            }
+            else
+            {
+                start_new_blink_sequence(); // Ensure we update the pattern immediately if a non-numeric key is pressed
+            }
+            // Ensure the timer pattern updates immediately on the first press
+            break;
         }
         if (master_buffer_ready)
         {
@@ -179,8 +278,34 @@ int main()
             }
         }
 
+        
+
+        
+
         fflush(stdout);
     }
 
     return 0;
 }
+
+// Replace your entire key-reading and state-switching blocks with this streamlined logic:
+// printf("Entered Days\n");
+//             switch (enter_state)
+//             {
+//             case NO_ENTRY:
+//                 printf("Entry: NO_ENTRY\r");
+//                 // Your no-entry logic block goes safely here without bleed-through...
+//                 break;
+//             case FIRST_PRESS:
+//                 printf("Entry: FIRST_PRESS\r");
+//                 // Your first press logic block goes safely here without bleed-through...
+//                 break;
+
+//             case SECOND_PRESS:
+//                 printf("Entry: SECOND_PRESS\r");
+//                 // Your second press logic block goes safely here without bleed-through...
+//                 break;
+
+//             default:
+//                 break;
+//             }
