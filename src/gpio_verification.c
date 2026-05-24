@@ -10,7 +10,9 @@ enum EnterState
 {
     NO_ENTRY,
     FIRST_PRESS,
-    SECOND_PRESS
+    SAVE_STATE_1,
+    SECOND_PRESS,
+    SAVE_STATE_2
 };
 
 enum SystemTimerState
@@ -29,12 +31,14 @@ int col_gpio_trigger_for_enter_time = 7;  // GPIO pin that triggers timed run en
 extern enum EnterState enter_state;
 extern int num_entered;
 extern char key_char;
+extern uint8_t blink_step; // Globally visible to track our current position in time
 extern uint32_t remaining_seconds;
 static int state_machine_alarm_num = -1;
 extern int key_event_count;
+volatile bool blink_phase_toggle = false;
 
 // Helper function to turn on the custom LED pattern based on the selected key
-static void turn_on_selected_leds(char key)
+void turn_on_selected_leds(char key)
 {
     switch (key)
     {
@@ -80,69 +84,170 @@ static void turn_off_all_leds()
     sio_hw->gpio_clr = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25);
 }
 
+// void multi_pattern_timer_handler()
+// {
+//     // 1. Acknowledge the hardware timer interrupt immediately
+//     timer_hw->intr = 1u << state_machine_alarm_num;
+
+//     // Static sequence step counter tracks exactly where we are in a blinking pattern
+//     static uint8_t blink_step = 0;
+//     uint32_t delay_us = 1000000; // Safe default fallback delay (1 second)
+
+//     // --- MODE 1: FIRST PRESS PATTERN (Steady Balanced Blinker) ---
+//     if (enter_state == FIRST_PRESS)
+//     {
+//         if (blink_step == 0)
+//         {
+//             turn_on_selected_leds(key_char);
+//             delay_us = 1000000; // Hold ON for 1.0 second
+//             blink_step = 1;     // Advance to off step
+//         }
+//         else
+//         {
+//             turn_off_all_leds();
+//             delay_us = 1000000; // Keep OFF for 1.0 second
+//             blink_step = 0;     // Loop back to start
+//         }
+//     }
+//     // --- MODE 2: SECOND PRESS PATTERN (Rapid Double-Blink Burst) ---
+//     else if (enter_state == SECOND_PRESS)
+//     {
+//         switch (blink_step)
+//         {
+//         case 0: // First sharp flash ON
+//             turn_on_selected_leds(key_char);
+//             delay_us = 150000; // ON for 150ms
+//             blink_step = 1;
+//             break;
+//         case 1: // First sharp flash OFF
+//             turn_off_all_leds();
+//             delay_us = 150000; // OFF for 150ms
+//             blink_step = 2;
+//             break;
+//         case 2: // Second sharp flash ON
+//             turn_on_selected_leds(key_char);
+//             delay_us = 150000; // ON for 150ms
+//             blink_step = 3;
+//             break;
+//         case 3: // Long trailing sync pause
+//         default:
+//             turn_off_all_leds();
+//             delay_us = 1000000; // Keep OFF for 1.0 second before restarting burst
+//             blink_step = 0;     // Reset sequence to step 0
+//             break;
+//         }
+//     }
+//     // --- MODE 3: SAFETY / NO ENTRY STATE ---
+//     else
+//     {
+//         turn_off_all_leds();
+//         blink_step = 0;
+//         return; // Halt alarm rescheduling if no active entry state is ongoing
+//     }
+
+//     // Schedule the next alarm tick cleanly using purely integer variables
+//     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + delay_us;
+// }
+
+
+
 void multi_pattern_timer_handler()
 {
     // 1. Acknowledge the hardware timer interrupt immediately
     timer_hw->intr = 1u << state_machine_alarm_num;
 
-    // Static sequence step counter tracks exactly where we are in a blinking pattern
-    static uint8_t blink_step = 0;
-    uint32_t delay_us = 1000000; // Safe default fallback delay (1 second)
+    // 2. Advance the time step (0 to 15 wraps around nicely for pattern matchers)
+    blink_step = (blink_step + 1) % 8;
 
-    // --- MODE 1: FIRST PRESS PATTERN (Steady Balanced Blinker) ---
-    if (enter_state == FIRST_PRESS)
-    {
-        if (blink_step == 0)
-        {
-            turn_on_selected_leds(key_char);
-            delay_us = 1000000; // Hold ON for 1.0 second
-            blink_step = 1;     // Advance to off step
-        }
-        else
-        {
-            turn_off_all_leds();
-            delay_us = 1000000; // Keep OFF for 1.0 second
-            blink_step = 0;     // Loop back to start
-        }
-    }
-    // --- MODE 2: SECOND PRESS PATTERN (Rapid Double-Blink Burst) ---
-    else if (enter_state == SECOND_PRESS)
-    {
-        switch (blink_step)
-        {
-        case 0: // First sharp flash ON
-            turn_on_selected_leds(key_char);
-            delay_us = 150000; // ON for 150ms
-            blink_step = 1;
-            break;
-        case 1: // First sharp flash OFF
-            turn_off_all_leds();
-            delay_us = 150000; // OFF for 150ms
-            blink_step = 2;
-            break;
-        case 2: // Second sharp flash ON
-            turn_on_selected_leds(key_char);
-            delay_us = 150000; // ON for 150ms
-            blink_step = 3;
-            break;
-        case 3: // Long trailing sync pause
-        default:
-            turn_off_all_leds();
-            delay_us = 1000000; // Keep OFF for 1.0 second before restarting burst
-            blink_step = 0;     // Reset sequence to step 0
-            break;
-        }
-    }
-    // --- MODE 3: SAFETY / NO ENTRY STATE ---
-    else
-    {
-        turn_off_all_leds();
-        blink_step = 0;
-        return; // Halt alarm rescheduling if no active entry state is ongoing
-    }
-
-    // Schedule the next alarm tick cleanly using purely integer variables
+    // 3. Keep a fixed cadence of 150ms (150,000 microseconds)
+    uint32_t delay_us = 250000;
     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + delay_us;
+}
+
+// Low-level GPIO driving function called exclusively inside the main loop
+void update_ui_leds_from_main(char stable_key)
+{
+    // Always start by clearing down all output bits to prevent visual artifacts
+    sio_hw->gpio_clr = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25);
+
+    bool should_be_on = false;
+    if (system_timer_state == MODE_MANUAL_ADJUST)
+    {
+         sio_hw->gpio_set = 15<< 22;
+    }
+    else 
+    {
+        switch (enter_state)
+        {
+            case SAVE_STATE_1:
+            case SAVE_STATE_2:
+                // Mode 1: Hold the value solid ON continuously
+                should_be_on = true;
+                break;
+
+            case FIRST_PRESS:
+                // Mode 2: Single Blink Pattern (150ms ON, then a long pause)
+                // A full cycle takes 8 steps (~1.2 seconds)
+                // Step 0: ON. Steps 1 to 7: OFF.
+                if ((blink_step % 8) == 0) {
+                    should_be_on = true;
+                }
+                break;
+
+            case SECOND_PRESS:
+                // Mode 3: Rapid Double-Blink Burst
+                // Step 0: ON (150ms)
+                // Step 1: OFF (150ms)
+                // Step 2: ON (150ms)
+                // Steps 3 to 9: OFF (1.05s long trailing sync pause)
+                // Total cycle = 10 steps (~1.5 seconds)
+                if (blink_step== 1 || blink_step == 3) {
+                    should_be_on = true;
+                }
+                break;
+
+            case NO_ENTRY:
+                switch (system_timer_state)
+                {
+                    case ENTER_DAYS:
+                        sio_hw->gpio_set = 1<<22;
+                        break;
+                    case ENTER_HOURS:
+                        sio_hw->gpio_set = 1<<23;
+                        break;
+                    case ENTER_MINUTES:
+                        sio_hw->gpio_set = 1<<24;
+                        break;
+                    case ENTER_SECONDS:
+                        sio_hw->gpio_set = 1 <<25;
+                        break;
+                }
+            default:
+                // Safety state / idle
+                should_be_on = false;
+                break;
+        }
+    }
+    
+
+    // Drive the hardware registers based on the pattern map output
+    if (should_be_on)
+    {
+        switch (stable_key)
+        {
+            case '0': sio_hw->gpio_set = (1 << 23) | (1 << 25); break;
+            case '1': sio_hw->gpio_set = (1 << 22); break;
+            case '2': sio_hw->gpio_set = (1 << 23); break;
+            case '3': sio_hw->gpio_set = (1 << 23) | (1 << 22); break;
+            case '4': sio_hw->gpio_set = (1 << 24); break;
+            case '5': sio_hw->gpio_set = (1 << 24) | (1 << 22); break;
+            case '6': sio_hw->gpio_set = (1 << 24) | (1 << 23); break;
+            case '7': sio_hw->gpio_set = (1 << 24) | (1 << 23) | (1 << 22); break;
+            case '8': sio_hw->gpio_set = (1 << 25); break;
+            case '9': sio_hw->gpio_set = (1 << 25) | (1 << 22); break;
+            default:  sio_hw->gpio_set = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25); break;
+        }
+    }
 }
 
 // Run this function ONCE inside your main initialization code
@@ -164,7 +269,10 @@ void init_timer_subsystem()
 // Call this inside set_time_handler() whenever a valid numeric key is accepted
 void start_new_blink_sequence()
 {
-    // Schedule an immediate interrupt execution to start the selected pattern cycle
+    // Force the clock counter back to 0 so the first cycle begins ON immediately
+    blink_step = 0;
+
+    // Force an immediate timer interrupt to fire in 50 microseconds
     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + 50;
 }
 
@@ -335,63 +443,3 @@ void init_state_machine_led()
     irq_set_enabled(IO_IRQ_BANK0, true);
 }
 
-int enter_timed_run_first_state()
-{
-    switch (key_char)
-    {
-    case '0' ... '9':
-    
-        if (!key_event_count)
-        {
-            remaining_seconds = 10 * (key_char - '0');
-            key_event_count = 1;
-        }
-        start_new_blink_sequence(); // 3. Force the timer to instantly adapt to the new pattern
-        break;
-    case '*':
-        system_timer_state = FIRST_PRESS;
-        key_event_count = 0;
-        break;
-    default:
-        enter_state = NO_ENTRY;
-        break;
-    }
-      
-    return remaining_seconds;
-}
-
-int enter_timed_run_second_state() // fill in
-{
-    switch (key_char)
-    {
-    case '0' ... '9':
-        if (!key_event_count)
-        {
-            remaining_seconds += (key_char - '0');
-            enter_state = SECOND_PRESS;
-        }
-        start_new_blink_sequence();
-        break;
-    case 'C':
-        // Clear the entry
-        remaining_seconds = 0;
-        enter_state = NO_ENTRY;
-        break;
-    default:
-        enter_state = NO_ENTRY;
-        break;
-    }
-    if (system_timer_state == ENTER_HOURS && remaining_seconds > 23)
-    {
-        // printf("Invalid hours input. Please enter a value between 0 and 23.\n");
-        remaining_seconds = 0;
-        enter_state = NO_ENTRY;
-    }
-    else if ((system_timer_state == ENTER_MINUTES || system_timer_state == ENTER_SECONDS) && remaining_seconds > 59)
-    {
-        // printf("Invalid minutes input. Please enter a value between 0 and 59.\n");
-        remaining_seconds = 0;
-        enter_state = NO_ENTRY;
-    }
-    return remaining_seconds;
-}
