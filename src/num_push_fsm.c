@@ -70,7 +70,7 @@ void noEntryLogic(char stable_key)
     case '0' ... '9':
         enter_state = FIRST_PRESS;
         start_new_blink_sequence();
-
+        last_num_entered = stable_key;
         break;
     case 'B':
         no_entry_back_state();
@@ -86,7 +86,6 @@ void firstPressLogic(char stable_key)
     {
     case '*':
         enter_state = SAVE_STATE_1;
-        turn_on_selected_leds(stable_key);
         break;
     case 'B':
         enter_state = NO_ENTRY;
@@ -102,20 +101,20 @@ void time_type_saved_save_state_1(char stable_key)
     // FIX: Switch on system_timer_state, not enter_state
     switch (system_timer_state)
     {
-    case ENTER_DAYS:
-        remaining_days = remaining_time;
-        break;
-    case ENTER_HOURS:
-        remaining_hours = remaining_time;
-        break;
-    case ENTER_MINUTES:
-        remaining_minutes = remaining_time;
-        break;
-    case ENTER_SECONDS:
-        remaining_seconds_seconds = remaining_time;
-        break;
-    default:
-        break;
+        case ENTER_DAYS:
+            remaining_days = remaining_time;
+            break;
+        case ENTER_HOURS:
+            remaining_hours = remaining_time;
+            break;
+        case ENTER_MINUTES:
+            remaining_minutes = remaining_time;
+            break;
+        case ENTER_SECONDS:
+            remaining_seconds_seconds = remaining_time;
+            break;
+        default:
+            break;
     }
 }
 
@@ -127,6 +126,7 @@ void save_state_1_logic(char stable_key)
         enter_state = SECOND_PRESS;
         time_type_saved_save_state_1(stable_key);
         start_new_blink_sequence();
+        last_num_entered = stable_key;
         break;
     case 'B':
         enter_state = NO_ENTRY;
@@ -142,8 +142,6 @@ void secondPressLogic(char stable_key)
     {
     case '*':
         enter_state = SAVE_STATE_2;
-        turn_on_selected_leds(stable_key);
-
         break;
     case 'B':
         enter_state = SAVE_STATE_1;

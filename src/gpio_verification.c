@@ -29,7 +29,7 @@ extern enum SystemTimerState system_timer_state;
 int col_gpio_trigger_for_manual_mode = 6; // GPIO pin that triggers manual mode entry
 int col_gpio_trigger_for_enter_time = 7;  // GPIO pin that triggers timed run entry
 extern enum EnterState enter_state;
-extern int num_entered;
+extern char last_num_entered;
 extern char key_char;
 extern uint8_t blink_step; // Globally visible to track our current position in time
 extern uint32_t remaining_seconds;
@@ -84,71 +84,6 @@ static void turn_off_all_leds()
     sio_hw->gpio_clr = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25);
 }
 
-// void multi_pattern_timer_handler()
-// {
-//     // 1. Acknowledge the hardware timer interrupt immediately
-//     timer_hw->intr = 1u << state_machine_alarm_num;
-
-//     // Static sequence step counter tracks exactly where we are in a blinking pattern
-//     static uint8_t blink_step = 0;
-//     uint32_t delay_us = 1000000; // Safe default fallback delay (1 second)
-
-//     // --- MODE 1: FIRST PRESS PATTERN (Steady Balanced Blinker) ---
-//     if (enter_state == FIRST_PRESS)
-//     {
-//         if (blink_step == 0)
-//         {
-//             turn_on_selected_leds(key_char);
-//             delay_us = 1000000; // Hold ON for 1.0 second
-//             blink_step = 1;     // Advance to off step
-//         }
-//         else
-//         {
-//             turn_off_all_leds();
-//             delay_us = 1000000; // Keep OFF for 1.0 second
-//             blink_step = 0;     // Loop back to start
-//         }
-//     }
-//     // --- MODE 2: SECOND PRESS PATTERN (Rapid Double-Blink Burst) ---
-//     else if (enter_state == SECOND_PRESS)
-//     {
-//         switch (blink_step)
-//         {
-//         case 0: // First sharp flash ON
-//             turn_on_selected_leds(key_char);
-//             delay_us = 150000; // ON for 150ms
-//             blink_step = 1;
-//             break;
-//         case 1: // First sharp flash OFF
-//             turn_off_all_leds();
-//             delay_us = 150000; // OFF for 150ms
-//             blink_step = 2;
-//             break;
-//         case 2: // Second sharp flash ON
-//             turn_on_selected_leds(key_char);
-//             delay_us = 150000; // ON for 150ms
-//             blink_step = 3;
-//             break;
-//         case 3: // Long trailing sync pause
-//         default:
-//             turn_off_all_leds();
-//             delay_us = 1000000; // Keep OFF for 1.0 second before restarting burst
-//             blink_step = 0;     // Reset sequence to step 0
-//             break;
-//         }
-//     }
-//     // --- MODE 3: SAFETY / NO ENTRY STATE ---
-//     else
-//     {
-//         turn_off_all_leds();
-//         blink_step = 0;
-//         return; // Halt alarm rescheduling if no active entry state is ongoing
-//     }
-
-//     // Schedule the next alarm tick cleanly using purely integer variables
-//     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + delay_us;
-// }
-
 
 
 void multi_pattern_timer_handler()
@@ -175,6 +110,10 @@ void update_ui_leds_from_main(char stable_key)
     {
          sio_hw->gpio_set = 15<< 22;
     }
+    // else if (system_timer_state == MODE_TIMED_RUN)
+    // {
+
+    // }
     else 
     {
         switch (enter_state)
@@ -193,7 +132,6 @@ void update_ui_leds_from_main(char stable_key)
                     should_be_on = true;
                 }
                 break;
-
             case SECOND_PRESS:
                 // Mode 3: Rapid Double-Blink Burst
                 // Step 0: ON (150ms)
@@ -233,7 +171,8 @@ void update_ui_leds_from_main(char stable_key)
     // Drive the hardware registers based on the pattern map output
     if (should_be_on)
     {
-        switch (stable_key)
+        char read_char = (enter_state == SAVE_STATE_1) || (enter_state == SAVE_STATE_2) ? last_num_entered : stable_key;
+        switch (read_char)
         {
             case '0': sio_hw->gpio_set = (1 << 23) | (1 << 25); break;
             case '1': sio_hw->gpio_set = (1 << 22); break;
