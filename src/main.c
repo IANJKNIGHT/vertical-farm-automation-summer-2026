@@ -39,6 +39,7 @@ int remaining_days = 0;
 int remaining_hours = 0;
 int remaining_minutes = 0;
 int remaining_seconds_seconds = 0;
+bool time_val_for_fan_displayed = false;
 
 volatile bool master_buffer_ready = false; // Flag to indicate a master buffer is full and ready for processing
 enum SystemTimerState
@@ -180,6 +181,7 @@ int main()
 
                 if (system_timer_state == MODE_DEFAULT)
                 {
+                    
                 }
                 else if (system_timer_state == MODE_MANUAL_ADJUST)
                 {

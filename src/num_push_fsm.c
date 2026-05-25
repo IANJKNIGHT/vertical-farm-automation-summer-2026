@@ -9,6 +9,7 @@ extern void turn_on_selected_leds(char key);
 extern char last_num_entered;
 // Remove 'extern' and add 'volatile'
 volatile uint8_t blink_step = 0; // Tracks our current position in time
+extern bool time_val_for_fan_displayed;
 
 enum SystemTimerState
 {
@@ -61,6 +62,30 @@ void no_entry_back_state()
         system_timer_state = ENTER_SECONDS;
         break;
     }
+    switch (system_timer_state)
+    {
+    case MODE_DEFAULT:
+        printf("Def\n");
+        break;
+    case MODE_MANUAL_ADJUST:
+        printf("Man\n");
+        break;
+    case ENTER_DAYS:
+        printf("Days\n");
+        break;
+    case ENTER_HOURS:
+        printf("Hrs\n");
+        break;
+    case ENTER_MINUTES:
+        printf("Mins\n");
+        break;
+    case ENTER_SECONDS:
+        printf("Secs\n");
+        break;
+    case MODE_TIMED_RUN:
+        printf("Timed\n");
+        break;
+    }
 }
 
 void noEntryLogic(char stable_key)
@@ -101,20 +126,20 @@ void time_type_saved_save_state_1(char stable_key)
     // FIX: Switch on system_timer_state, not enter_state
     switch (system_timer_state)
     {
-        case ENTER_DAYS:
-            remaining_days = remaining_time;
-            break;
-        case ENTER_HOURS:
-            remaining_hours = remaining_time;
-            break;
-        case ENTER_MINUTES:
-            remaining_minutes = remaining_time;
-            break;
-        case ENTER_SECONDS:
-            remaining_seconds_seconds = remaining_time;
-            break;
-        default:
-            break;
+    case ENTER_DAYS:
+        remaining_days = remaining_time;
+        break;
+    case ENTER_HOURS:
+        remaining_hours = remaining_time;
+        break;
+    case ENTER_MINUTES:
+        remaining_minutes = remaining_time;
+        break;
+    case ENTER_SECONDS:
+        remaining_seconds_seconds = remaining_time;
+        break;
+    default:
+        break;
     }
 }
 
@@ -213,7 +238,10 @@ void save_state_2_logic(char stable_key)
     {
     case 'D':
         time_type_saved_save_state_2(stable_key); // 1. Save the captured value first
-        save2_next_systemTimerState();            // 2. Then transition states safely
+        time_val_for_fan_displayed = true;
+        start_new_blink_sequence();
+        save2_next_systemTimerState(); // 2. Then transition states safely
+        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
         break;
     case 'B':
         break;

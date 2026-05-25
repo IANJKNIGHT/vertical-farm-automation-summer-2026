@@ -30,6 +30,11 @@ int col_gpio_trigger_for_manual_mode = 6; // GPIO pin that triggers manual mode 
 int col_gpio_trigger_for_enter_time = 7;  // GPIO pin that triggers timed run entry
 extern enum EnterState enter_state;
 extern char last_num_entered;
+extern int remaining_days;
+extern int remaining_hours;
+extern int remaining_minutes;
+extern int remaining_seconds_seconds;
+extern bool time_val_for_fan_displayed;
 extern char key_char;
 extern uint8_t blink_step; // Globally visible to track our current position in time
 extern uint32_t remaining_seconds;
@@ -84,8 +89,6 @@ static void turn_off_all_leds()
     sio_hw->gpio_clr = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25);
 }
 
-
-
 void multi_pattern_timer_handler()
 {
     // 1. Acknowledge the hardware timer interrupt immediately
@@ -99,6 +102,60 @@ void multi_pattern_timer_handler()
     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + delay_us;
 }
 
+void display_time_input(int total_time)
+{
+    switch (total_time)
+    {
+        case 0:
+            break;
+        case 1:
+            sio_hw->gpio_set = (1 << 22);
+            break;
+        case 2:
+            sio_hw->gpio_set = (1 << 23);
+            break;
+        case 3:
+            sio_hw->gpio_set = (1 << 23) | (1 << 22);
+            break;
+        case 4:
+            sio_hw->gpio_set = (1 << 24);
+            break;
+        case 5:
+            sio_hw->gpio_set = (1 << 24) | (1 << 22);
+            break;
+        case 6:
+            sio_hw->gpio_set = (1 << 24) | (1 << 23);
+            break;
+        case 7:
+            sio_hw->gpio_set = (1 << 24) | (1 << 23) | (1 << 22);
+            break;
+        case 8:
+            sio_hw->gpio_set = (1 << 25);
+            break;
+        case 9:
+            sio_hw->gpio_set = (1 << 25) | (1 << 22);
+            break;
+        case 10: 
+            sio_hw->gpio_set = (1<<25) | (1<< 23);
+            break;
+        case 11:
+            sio_hw->gpio_set = (1<<25) | (1<<23) | (1<< 22);
+            break;
+        case 12: 
+            sio_hw->gpio_set = (1<<25) | (1 << 24);
+            break;
+        case 13: 
+            sio_hw->gpio_set = (1<<25) | (1 << 24) | (1<<22);
+            break;
+        case 14: 
+            sio_hw->gpio_set = (1<<25) | (1 << 24) | (1<<23);
+            break;
+        default: 
+            sio_hw->gpio_set = (1<<25) | (1 << 24) | (1<<23) | (1<<22);
+            break;
+    }
+}
+
 // Low-level GPIO driving function called exclusively inside the main loop
 void update_ui_leds_from_main(char stable_key)
 {
@@ -108,65 +165,106 @@ void update_ui_leds_from_main(char stable_key)
     bool should_be_on = false;
     if (system_timer_state == MODE_MANUAL_ADJUST)
     {
-         sio_hw->gpio_set = 15<< 22;
+        sio_hw->gpio_set = 15 << 22;
     }
-    // else if (system_timer_state == MODE_TIMED_RUN)
-    // {
-
-    // }
-    else 
+    else if (system_timer_state == MODE_TIMED_RUN)
+    {
+        if (time_val_for_fan_displayed)
+        {
+            switch (blink_step)
+            {
+                case 0:
+                case 1: 
+                    if (remaining_days <= 15 || blink_step == 0) 
+                    {
+                        display_time_input(remaining_days);
+                    }
+                    break;
+                case 2:
+                case 3: 
+                    if (remaining_hours <= 15 || blink_step == 2) 
+                    {
+                        display_time_input(remaining_hours);
+                    }
+                    break;
+                case 4:
+                case 5: 
+                    if (remaining_minutes <= 15 || blink_step == 4) 
+                    {
+                        display_time_input(remaining_minutes);
+                    }
+                    break;
+                case 6:
+                case 7: 
+                    if (remaining_seconds_seconds <= 15 || blink_step == 0) 
+                    {
+                        display_time_input(remaining_seconds_seconds);
+                    }
+                    break;                            
+            }
+            time_val_for_fan_displayed = true;
+            if (blink_step == 7)
+            {
+                time_val_for_fan_displayed = false;
+            }
+        }
+    }
+    else
     {
         switch (enter_state)
         {
-            case SAVE_STATE_1:
-            case SAVE_STATE_2:
-                // Mode 1: Hold the value solid ON continuously
+        case SAVE_STATE_1:
+        case SAVE_STATE_2:
+            // Mode 1: Hold the value solid ON continuously
+            should_be_on = true;
+            break;
+
+        case FIRST_PRESS:
+            // Mode 2: Single Blink Pattern (150ms ON, then a long pause)
+            // A full cycle takes 8 steps (~1.2 seconds)
+            // Step 0: ON. Steps 1 to 7: OFF.
+            if ((blink_step % 8) == 0)
+            {
                 should_be_on = true;
-                break;
+            }
+            break;
+        case SECOND_PRESS:
+            // Mode 3: Rapid Double-Blink Burst
+            // Step 0: ON (150ms)
+            // Step 1: OFF (150ms)
+            // Step 2: ON (150ms)
+            // Steps 3 to 9: OFF (1.05s long trailing sync pause)
+            // Total cycle = 10 steps (~1.5 seconds)
+            if (blink_step == 1 || blink_step == 3)
+            {
+                should_be_on = true;
+            }
+            break;
 
-            case FIRST_PRESS:
-                // Mode 2: Single Blink Pattern (150ms ON, then a long pause)
-                // A full cycle takes 8 steps (~1.2 seconds)
-                // Step 0: ON. Steps 1 to 7: OFF.
-                if ((blink_step % 8) == 0) {
-                    should_be_on = true;
-                }
+        case NO_ENTRY:
+            switch (system_timer_state)
+            {
+            case ENTER_DAYS:
+                sio_hw->gpio_set = 1 << 22;
                 break;
-            case SECOND_PRESS:
-                // Mode 3: Rapid Double-Blink Burst
-                // Step 0: ON (150ms)
-                // Step 1: OFF (150ms)
-                // Step 2: ON (150ms)
-                // Steps 3 to 9: OFF (1.05s long trailing sync pause)
-                // Total cycle = 10 steps (~1.5 seconds)
-                if (blink_step== 1 || blink_step == 3) {
-                    should_be_on = true;
-                }
+            case ENTER_HOURS:
+                sio_hw->gpio_set = 1 << 23;
                 break;
-
-            case NO_ENTRY:
-                switch (system_timer_state)
-                {
-                    case ENTER_DAYS:
-                        sio_hw->gpio_set = 1<<22;
-                        break;
-                    case ENTER_HOURS:
-                        sio_hw->gpio_set = 1<<23;
-                        break;
-                    case ENTER_MINUTES:
-                        sio_hw->gpio_set = 1<<24;
-                        break;
-                    case ENTER_SECONDS:
-                        sio_hw->gpio_set = 1 <<25;
-                        break;
-                }
-            default:
-                // Safety state / idle
-                should_be_on = false;
+            case ENTER_MINUTES:
+                sio_hw->gpio_set = 1 << 24;
                 break;
+            case ENTER_SECONDS:
+                sio_hw->gpio_set = 1 << 25;
+                break;
+            }
+        default:
+            // Safety state / idle
+            should_be_on = false;
+            break;
         }
     }
-    
+        
+        
 
     // Drive the hardware registers based on the pattern map output
     if (should_be_on)
@@ -174,17 +272,39 @@ void update_ui_leds_from_main(char stable_key)
         char read_char = (enter_state == SAVE_STATE_1) || (enter_state == SAVE_STATE_2) ? last_num_entered : stable_key;
         switch (read_char)
         {
-            case '0': sio_hw->gpio_set = (1 << 23) | (1 << 25); break;
-            case '1': sio_hw->gpio_set = (1 << 22); break;
-            case '2': sio_hw->gpio_set = (1 << 23); break;
-            case '3': sio_hw->gpio_set = (1 << 23) | (1 << 22); break;
-            case '4': sio_hw->gpio_set = (1 << 24); break;
-            case '5': sio_hw->gpio_set = (1 << 24) | (1 << 22); break;
-            case '6': sio_hw->gpio_set = (1 << 24) | (1 << 23); break;
-            case '7': sio_hw->gpio_set = (1 << 24) | (1 << 23) | (1 << 22); break;
-            case '8': sio_hw->gpio_set = (1 << 25); break;
-            case '9': sio_hw->gpio_set = (1 << 25) | (1 << 22); break;
-            default:  sio_hw->gpio_set = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25); break;
+        case '0':
+            sio_hw->gpio_set = (1 << 23) | (1 << 25);
+            break;
+        case '1':
+            sio_hw->gpio_set = (1 << 22);
+            break;
+        case '2':
+            sio_hw->gpio_set = (1 << 23);
+            break;
+        case '3':
+            sio_hw->gpio_set = (1 << 23) | (1 << 22);
+            break;
+        case '4':
+            sio_hw->gpio_set = (1 << 24);
+            break;
+        case '5':
+            sio_hw->gpio_set = (1 << 24) | (1 << 22);
+            break;
+        case '6':
+            sio_hw->gpio_set = (1 << 24) | (1 << 23);
+            break;
+        case '7':
+            sio_hw->gpio_set = (1 << 24) | (1 << 23) | (1 << 22);
+            break;
+        case '8':
+            sio_hw->gpio_set = (1 << 25);
+            break;
+        case '9':
+            sio_hw->gpio_set = (1 << 25) | (1 << 22);
+            break;
+        default:
+            sio_hw->gpio_set = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25);
+            break;
         }
     }
 }
@@ -214,51 +334,6 @@ void start_new_blink_sequence()
     // Force an immediate timer interrupt to fire in 50 microseconds
     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + 50;
 }
-
-// void state_machine_handler(uint gpio, uint32_t events)
-// {
-//     // Check if the manual mode trigger fired
-//     uint32_t col_gpio_mask = 1u << col_gpio_trigger_for_manual_mode;
-//     if (gpio == col_gpio_trigger_for_manual_mode && (events & GPIO_IRQ_EDGE_RISE))
-//     {
-//         if (system_timer_state == MODE_MANUAL_ADJUST)
-//         {
-//             uint32_t led_mask = ((1 << 22) | (1 << 23) | (1 << 24) | (1 << 25));
-//             sio_hw->gpio_set = led_mask;
-
-//         }
-//         gpio_acknowledge_irq(col_gpio_trigger_for_enter_time, col_gpio_mask);
-//     }
-//     uint32_t col_enter_time_mask = 1u << col_gpio_trigger_for_enter_time;
-//     // Check if the timed run trigger fired
-//     if (gpio == col_gpio_trigger_for_enter_time && (events & GPIO_IRQ_EDGE_RISE))
-//     {
-//         if (key_char == '#')
-//         {
-//             switch (system_timer_state)
-//             {
-//             case ENTER_DAYS:
-//                 sio_hw->gpio_set = (1 << 22);
-//                 break;
-//             case ENTER_HOURS:
-//                 sio_hw->gpio_set = (1 << 23);
-//                 break;
-//             case ENTER_MINUTES:
-//                 sio_hw->gpio_set = (1 << 24);
-//                 break;
-//             case ENTER_SECONDS:
-//                 sio_hw->gpio_set = (1 << 25);
-//                 break;
-//             default:
-//                 break;
-//             }
-//         }
-//         gpio_acknowledge_irq(col_gpio_trigger_for_enter_time, col_enter_time_mask);
-//     }
-
-//     // NOTE: You do NOT need to call gpio_acknowledge_irq() here.
-//     // The SDK master handler clears the interrupt flag for you automatically when this callback finishes!
-// }
 
 void state_machine_handler(uint gpio, uint32_t events)
 {
@@ -298,51 +373,6 @@ void state_machine_handler(uint gpio, uint32_t events)
     }
 }
 
-// void init_state_machine_led()
-
-// {
-
-//     for (int gpio = 22; gpio <= 25; gpio++)
-
-//     {
-
-//         uint32_t mask = 1u << (gpio & 0x1fu);
-
-//         sio_hw->gpio_oe_set = mask;
-
-//         sio_hw->gpio_clr = mask;
-
-//         hw_write_masked(&pads_bank0_hw->io[gpio],
-
-//                         PADS_BANK0_GPIO0_IE_BITS,
-
-//                         PADS_BANK0_GPIO0_IE_BITS | PADS_BANK0_GPIO0_OD_BITS);
-
-//         io_bank0_hw->io[gpio].ctrl = GPIO_FUNC_SIO << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
-
-//         hw_clear_bits(&pads_bank0_hw->io[gpio], PADS_BANK0_GPIO0_ISO_BITS);
-
-//     }
-
-//     // Set the interrupt handler for GPIO 22-25 to manual_mode_adjust_led_handler
-
-//     // Set the interrupt handler for our source trigger pin
-
-//     // Turn on global IO interrupts and enable the specific pin edge
-
-//     uint32_t pin_mask = (1u << col_gpio_trigger_for_manual_mode) | (1u << col_gpio_trigger_for_enter_time);
-
-//     gpio_add_raw_irq_handler(pin_mask, state_machine_handler);
-//     // Clear any pending interrupts on the trigger pins before enabling
-//     gpio_acknowledge_irq(col_gpio_trigger_for_manual_mode, pin_mask);
-
-//     gpio_set_irq_enabled(col_gpio_trigger_for_manual_mode, GPIO_IRQ_EDGE_RISE, true);
-//     gpio_set_irq_enabled(col_gpio_trigger_for_enter_time, GPIO_IRQ_EDGE_RISE, true);
-//     gpio_set_dormant_irq_enabled(col_gpio_trigger_for_enter_time, GPIO_IRQ_EDGE_RISE, true); // Enable dormant wake-up on the timed run trigger pin
-//     // This safely enables edge-rise tracking for both pins across Core 0 without hitting the exclusive lock twice
-//     irq_set_enabled(IO_IRQ_BANK0, true);
-// }
-
 void init_state_machine_led()
 {
     // Initialize GPIO 22-25 as SIO outputs for the LEDs
@@ -381,4 +411,3 @@ void init_state_machine_led()
     // 4. Safe hardware vector release
     irq_set_enabled(IO_IRQ_BANK0, true);
 }
-
