@@ -10,6 +10,7 @@ extern char last_num_entered;
 // Remove 'extern' and add 'volatile'
 volatile uint8_t blink_step = 0; // Tracks our current position in time
 extern bool time_val_for_fan_displayed;
+extern bool first_num_set;
 
 enum SystemTimerState
 {
@@ -30,7 +31,7 @@ enum EnterState
     FIRST_PRESS,
     SAVE_STATE_1,
     SECOND_PRESS,
-    SAVE_STATE_2
+    SAVE_STATE_2,
 };
 
 extern enum EnterState enter_state;
@@ -39,6 +40,7 @@ extern int remaining_days;
 extern int remaining_hours;
 extern int remaining_minutes;
 extern int remaining_seconds_seconds;
+extern bool entry_too_large_error; // when the entered time is greater than 23 hours or 59 min/seconds
 void start_new_blink_sequence();
 
 void no_entry_back_state()
@@ -62,43 +64,18 @@ void no_entry_back_state()
         system_timer_state = ENTER_SECONDS;
         break;
     }
-    switch (system_timer_state)
-    {
-    case MODE_DEFAULT:
-        printf("Def\n");
-        break;
-    case MODE_MANUAL_ADJUST:
-        printf("Man\n");
-        break;
-    case ENTER_DAYS:
-        printf("Days\n");
-        break;
-    case ENTER_HOURS:
-        printf("Hrs\n");
-        break;
-    case ENTER_MINUTES:
-        printf("Mins\n");
-        break;
-    case ENTER_SECONDS:
-        printf("Secs\n");
-        break;
-    case MODE_TIMED_RUN:
-        printf("Timed\n");
-        break;
-    }
 }
 
 void noEntryLogic(char stable_key)
 {
+
     switch (stable_key)
     {
     case '0' ... '9':
         enter_state = FIRST_PRESS;
         start_new_blink_sequence();
         last_num_entered = stable_key;
-        break;
-    case 'B':
-        no_entry_back_state();
+        first_num_set = true;
         break;
     default:
         break;
@@ -111,6 +88,9 @@ void firstPressLogic(char stable_key)
     {
     case '*':
         enter_state = SAVE_STATE_1;
+        time_type_saved_save_state_1(last_num_entered);
+        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
+        first_num_set = false;
         break;
     case 'B':
         enter_state = NO_ENTRY;
@@ -149,7 +129,6 @@ void save_state_1_logic(char stable_key)
     {
     case '0' ... '9':
         enter_state = SECOND_PRESS;
-        time_type_saved_save_state_1(stable_key);
         start_new_blink_sequence();
         last_num_entered = stable_key;
         break;
@@ -167,9 +146,11 @@ void secondPressLogic(char stable_key)
     {
     case '*':
         enter_state = SAVE_STATE_2;
+        time_type_saved_save_state_2(last_num_entered);
+        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
         break;
     case 'B':
-        enter_state = SAVE_STATE_1;
+        enter_state = NO_ENTRY;
         break;
     default:
         break;
@@ -196,14 +177,27 @@ void time_type_saved_save_state_2(char stable_key)
         remaining_hours += remaining_time;
         if (remaining_hours > 23)
             remaining_hours = 0;
+        enter_state = NO_ENTRY;
+        entry_too_large_error = true;
+        start_new_blink_sequence();
+
+        enter_state = NO_ENTRY;
+
         break;
     case ENTER_MINUTES:
         remaining_minutes += remaining_time;
-        remaining_minutes = less_than_59_check(remaining_minutes);
+        if (less_than_59_check(remaining_minutes) == 0)
+        {
+            entry_too_large_logic();
+        }
+
         break;
     case ENTER_SECONDS:
         remaining_seconds_seconds += remaining_time;
-        remaining_seconds_seconds = less_than_59_check(remaining_seconds_seconds);
+        if (less_than_59_check(remaining_minutes) == 0)
+        {
+            entry_too_large_logic();
+        }
         break;
     default:
         break;
@@ -237,11 +231,9 @@ void save_state_2_logic(char stable_key)
     switch (stable_key)
     {
     case 'D':
-        time_type_saved_save_state_2(stable_key); // 1. Save the captured value first
         time_val_for_fan_displayed = true;
         start_new_blink_sequence();
         save2_next_systemTimerState(); // 2. Then transition states safely
-        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
         break;
     case 'B':
         break;
@@ -249,4 +241,61 @@ void save_state_2_logic(char stable_key)
         enter_state = SAVE_STATE_2;
         break;
     }
+}
+
+void debug_enter_state()
+{
+    switch (enter_state)
+    {
+    case NO_ENTRY:
+        printf("No Entry\n");
+        break;
+    case FIRST_PRESS:
+        printf("1st\n");
+        break;
+    case SAVE_STATE_1:
+        printf("SS1\n");
+        break;
+    case SECOND_PRESS:
+        printf("2nd\n");
+        break;
+    case SAVE_STATE_2:
+        printf("SS2\n");
+        break;
+    }
+}
+
+void debug_system_timer_state()
+{
+    switch (system_timer_state)
+    {
+    case MODE_DEFAULT:
+        printf("Def\n");
+        break;
+    case MODE_MANUAL_ADJUST:
+        printf("Man\n");
+        break;
+    case ENTER_DAYS:
+        printf("Days\n");
+        break;
+    case ENTER_HOURS:
+        printf("Hrs\n");
+        break;
+    case ENTER_MINUTES:
+        printf("Mins\n");
+        break;
+    case ENTER_SECONDS:
+        printf("Secs\n");
+        break;
+    case MODE_TIMED_RUN:
+        printf("Timed\n");
+        break;
+    }
+}
+
+void entry_too_large_logic()
+{
+    enter_state = NO_ENTRY;
+    entry_too_large_error = true;
+    start_new_blink_sequence();
 }

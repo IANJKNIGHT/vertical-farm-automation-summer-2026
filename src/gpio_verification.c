@@ -4,7 +4,10 @@
 #include "hardware/timer.h"
 #include "hardware/irq.h"
 
-#define ALARM_NUM0 0
+#define enter_days_led 22
+#define enter_hours_led 23
+#define enter_minutes_led 24
+#define enter_seconds_led 25
 
 enum EnterState
 {
@@ -41,6 +44,7 @@ extern uint32_t remaining_seconds;
 static int state_machine_alarm_num = -1;
 extern int key_event_count;
 volatile bool blink_phase_toggle = false;
+extern bool entry_too_large_error;
 
 // Helper function to turn on the custom LED pattern based on the selected key
 void turn_on_selected_leds(char key)
@@ -106,52 +110,71 @@ void display_time_input(int total_time)
 {
     switch (total_time)
     {
-        case 0:
+    case 0:
+        break;
+    case 1:
+        sio_hw->gpio_set = (1 << 22);
+        break;
+    case 2:
+        sio_hw->gpio_set = (1 << 23);
+        break;
+    case 3:
+        sio_hw->gpio_set = (1 << 23) | (1 << 22);
+        break;
+    case 4:
+        sio_hw->gpio_set = (1 << 24);
+        break;
+    case 5:
+        sio_hw->gpio_set = (1 << 24) | (1 << 22);
+        break;
+    case 6:
+        sio_hw->gpio_set = (1 << 24) | (1 << 23);
+        break;
+    case 7:
+        sio_hw->gpio_set = (1 << 24) | (1 << 23) | (1 << 22);
+        break;
+    case 8:
+        sio_hw->gpio_set = (1 << 25);
+        break;
+    case 9:
+        sio_hw->gpio_set = (1 << 25) | (1 << 22);
+        break;
+    case 10:
+        sio_hw->gpio_set = (1 << 25) | (1 << 23);
+        break;
+    case 11:
+        sio_hw->gpio_set = (1 << 25) | (1 << 23) | (1 << 22);
+        break;
+    case 12:
+        sio_hw->gpio_set = (1 << 25) | (1 << 24);
+        break;
+    case 13:
+        sio_hw->gpio_set = (1 << 25) | (1 << 24) | (1 << 22);
+        break;
+    case 14:
+        sio_hw->gpio_set = (1 << 25) | (1 << 24) | (1 << 23);
+        break;
+    default:
+        sio_hw->gpio_set = (1 << 25) | (1 << 24) | (1 << 23) | (1 << 22);
+        break;
+    }
+}
+
+void blink_time_frame()
+{
+    switch(system_timer_state)
+    {
+        case ENTER_DAYS:
+            sio_hw->gpio_set = (1 << enter_days_led);
             break;
-        case 1:
-            sio_hw->gpio_set = (1 << 22);
+        case ENTER_HOURS:
+            sio_hw->gpio_set = (1 << enter_hours_led);
             break;
-        case 2:
-            sio_hw->gpio_set = (1 << 23);
+        case ENTER_MINUTES:
+            sio_hw->gpio_set = (1 << enter_minutes_led);
             break;
-        case 3:
-            sio_hw->gpio_set = (1 << 23) | (1 << 22);
-            break;
-        case 4:
-            sio_hw->gpio_set = (1 << 24);
-            break;
-        case 5:
-            sio_hw->gpio_set = (1 << 24) | (1 << 22);
-            break;
-        case 6:
-            sio_hw->gpio_set = (1 << 24) | (1 << 23);
-            break;
-        case 7:
-            sio_hw->gpio_set = (1 << 24) | (1 << 23) | (1 << 22);
-            break;
-        case 8:
-            sio_hw->gpio_set = (1 << 25);
-            break;
-        case 9:
-            sio_hw->gpio_set = (1 << 25) | (1 << 22);
-            break;
-        case 10: 
-            sio_hw->gpio_set = (1<<25) | (1<< 23);
-            break;
-        case 11:
-            sio_hw->gpio_set = (1<<25) | (1<<23) | (1<< 22);
-            break;
-        case 12: 
-            sio_hw->gpio_set = (1<<25) | (1 << 24);
-            break;
-        case 13: 
-            sio_hw->gpio_set = (1<<25) | (1 << 24) | (1<<22);
-            break;
-        case 14: 
-            sio_hw->gpio_set = (1<<25) | (1 << 24) | (1<<23);
-            break;
-        default: 
-            sio_hw->gpio_set = (1<<25) | (1 << 24) | (1<<23) | (1<<22);
+        case ENTER_SECONDS:
+            sio_hw->gpio_set = (1 << enter_seconds_led);
             break;
     }
 }
@@ -167,40 +190,65 @@ void update_ui_leds_from_main(char stable_key)
     {
         sio_hw->gpio_set = 15 << 22;
     }
+    else if (entry_too_large_error)
+    {
+        switch (blink_step)
+        {
+            case 0:
+                sio_hw->gpio_set = (1 << enter_seconds_led);
+                break;
+            case 1:
+                sio_hw->gpio_set = (1 << enter_minutes_led);
+                break;
+            case 2:
+                sio_hw->gpio_set = (1 << enter_hours_led);
+                break;
+            case 3:
+                sio_hw->gpio_set = (1 << enter_days_led);
+                break;
+            case 4:
+            case 6:
+                blink_time_frame();
+                break;
+            case 5:
+            case 7:
+                break;
+        }
+    }
     else if (system_timer_state == MODE_TIMED_RUN)
     {
         if (time_val_for_fan_displayed)
         {
             switch (blink_step)
             {
-                case 0:
-                case 1: 
-                    if (remaining_days <= 15 || blink_step == 0) 
-                    {
-                        display_time_input(remaining_days);
-                    }
-                    break;
-                case 2:
-                case 3: 
-                    if (remaining_hours <= 15 || blink_step == 2) 
-                    {
-                        display_time_input(remaining_hours);
-                    }
-                    break;
-                case 4:
-                case 5: 
-                    if (remaining_minutes <= 15 || blink_step == 4) 
-                    {
-                        display_time_input(remaining_minutes);
-                    }
-                    break;
-                case 6:
-                case 7: 
-                    if (remaining_seconds_seconds <= 15 || blink_step == 0) 
-                    {
-                        display_time_input(remaining_seconds_seconds);
-                    }
-                    break;                            
+            case 0:
+            case 1:
+                if (remaining_days <= 15 || blink_step == 0)
+                {
+                    display_time_input(remaining_days);
+                }
+                break;
+            case 2:
+            case 3:
+                if (remaining_hours <= 15 || blink_step == 2)
+                {
+                    display_time_input(remaining_hours);
+                }
+                break;
+            case 4:
+            case 5:
+                if (remaining_minutes <= 15 || blink_step == 4)
+                {
+                    display_time_input(remaining_minutes);
+                }
+                break;
+            case 6:
+            case 7:
+                if (remaining_seconds_seconds <= 15 || blink_step == 0)
+                {
+                    display_time_input(remaining_seconds_seconds);
+                }
+                break;
             }
             time_val_for_fan_displayed = true;
             if (blink_step == 7)
@@ -263,8 +311,6 @@ void update_ui_leds_from_main(char stable_key)
             break;
         }
     }
-        
-        
 
     // Drive the hardware registers based on the pattern map output
     if (should_be_on)

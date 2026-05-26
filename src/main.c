@@ -31,6 +31,7 @@ uint16_t num_entered = '\0';
 uint16_t key_event = 0;
 int key_event_count = 0;
 char last_num_entered = '\0';
+bool first_num_set = false;
 
 volatile uint16_t *completed_raw_buffer;
 absolute_time_t mode_switch_time_remaining_to_set;
@@ -40,6 +41,7 @@ int remaining_hours = 0;
 int remaining_minutes = 0;
 int remaining_seconds_seconds = 0;
 bool time_val_for_fan_displayed = false;
+bool entry_too_large_error = false; // when the entered time is greater than 23 hours or 59 min/seconds
 
 volatile bool master_buffer_ready = false; // Flag to indicate a master buffer is full and ready for processing
 enum SystemTimerState
@@ -59,7 +61,7 @@ enum EnterState
     FIRST_PRESS,
     SAVE_STATE_1,
     SECOND_PRESS,
-    SAVE_STATE_2
+    SAVE_STATE_2,
 };
 enum EnterState enter_state = NO_ENTRY;
 
@@ -77,6 +79,8 @@ void save_state_1_logic(char stable_key);
 void secondPressLogic(char stable_key);
 void update_ui_leds_from_main(char stable_key);
 void save_state_2_logic();
+void debug_enter_state();
+void debug_system_timer_state();
 uint32_t enter_timed_run_first_state();
 uint32_t enter_timed_run_second_state();
 // ///////////////////////////////////////////////////////////////////
@@ -110,31 +114,37 @@ int main()
     for (;;)
     {
         key_event = key_pop();
-        if (key_event != 0) // 50ms && absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 50000
+        if (key_event != 0 && (absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 2000000)) // 50ms && absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 50000
         {
 
             last_key_press_time = get_absolute_time();
             key_char = (char)(key_event & 0xFF);
+            debug_system_timer_state();
+            debug_enter_state();
+        }
+        else
+        {
+            key_event = 0;
         }
         char current_key_snapshot = key_char;
 
         switch (system_timer_state)
         {
-            case MODE_DEFAULT:
-                duty_cycle = 50;
-                if (key_char == 'A')
-                {
-                    system_timer_state = MODE_MANUAL_ADJUST;
-                    mode_switch_time_remaining_to_set = get_absolute_time();
-                }
-                break;
-            case MODE_MANUAL_ADJUST:
-                system_timer_state = (key_char == '#') ? ENTER_DAYS : (key_char == 'B') ? MODE_DEFAULT
-                                                                                        : MODE_MANUAL_ADJUST;
-                set_duty = adc_fan_speed_control[0] * 100 / 4095;
-                break;
-            default:
-                break;
+        case MODE_DEFAULT:
+            duty_cycle = 50;
+            if (key_char == 'A')
+            {
+                system_timer_state = MODE_MANUAL_ADJUST;
+                mode_switch_time_remaining_to_set = get_absolute_time();
+            }
+            break;
+        case MODE_MANUAL_ADJUST:
+            system_timer_state = (key_char == '#') ? ENTER_DAYS : (key_char == 'B') ? MODE_DEFAULT
+                                                                                    : MODE_MANUAL_ADJUST;
+            set_duty = adc_fan_speed_control[0] * 100 / 4095;
+            break;
+        default:
+            break;
         }
 
         if (key_event != 0 && system_timer_state != MODE_DEFAULT && system_timer_state != MODE_MANUAL_ADJUST)
@@ -156,9 +166,11 @@ int main()
             case SAVE_STATE_2:
                 save_state_2_logic(current_key_snapshot);
                 break;
+            case ENTRY_TOO_LARGE:
+                entry_too_large_logic();
             }
         }
-
+        current_key_snapshot = first_num_set == true ? last_num_entered : current_key_snapshot;
         update_ui_leds_from_main(current_key_snapshot);
 
         if (master_buffer_ready)
@@ -181,7 +193,6 @@ int main()
 
                 if (system_timer_state == MODE_DEFAULT)
                 {
-                    
                 }
                 else if (system_timer_state == MODE_MANUAL_ADJUST)
                 {
