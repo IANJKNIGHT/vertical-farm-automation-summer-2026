@@ -15,7 +15,8 @@ enum EnterState
     FIRST_PRESS,
     SAVE_STATE_1,
     SECOND_PRESS,
-    SAVE_STATE_2
+    SAVE_STATE_2,
+    TOO_BIG
 };
 
 enum SystemTimerState
@@ -99,7 +100,8 @@ void multi_pattern_timer_handler()
     timer_hw->intr = 1u << state_machine_alarm_num;
 
     // 2. Advance the time step (0 to 15 wraps around nicely for pattern matchers)
-    blink_step = (blink_step + 1) % 8;
+    blink_step = (blink_step) % 8;
+    blink_step += 1;
 
     // 3. Keep a fixed cadence of 150ms (150,000 microseconds)
     uint32_t delay_us = 250000;
@@ -162,20 +164,23 @@ void display_time_input(int total_time)
 
 void blink_time_frame()
 {
-    switch(system_timer_state)
+    switch (system_timer_state)
     {
-        case ENTER_DAYS:
-            sio_hw->gpio_set = (1 << enter_days_led);
-            break;
-        case ENTER_HOURS:
-            sio_hw->gpio_set = (1 << enter_hours_led);
-            break;
-        case ENTER_MINUTES:
-            sio_hw->gpio_set = (1 << enter_minutes_led);
-            break;
-        case ENTER_SECONDS:
-            sio_hw->gpio_set = (1 << enter_seconds_led);
-            break;
+    case ENTER_DAYS:
+        sio_hw->gpio_set = (1 << enter_days_led);
+        break;
+    case ENTER_HOURS:
+        sio_hw->gpio_set = (1 << enter_hours_led);
+        break;
+    case ENTER_MINUTES:
+        sio_hw->gpio_set = (1 << enter_minutes_led);
+        break;
+    case ENTER_SECONDS:
+        sio_hw->gpio_set = (1 << enter_seconds_led);
+        break;
+    case MODE_DEFAULT:
+    case MODE_MANUAL_ADJUST:
+        break;
     }
 }
 
@@ -183,7 +188,7 @@ void blink_time_frame()
 void update_ui_leds_from_main(char stable_key)
 {
     // Always start by clearing down all output bits to prevent visual artifacts
-    sio_hw->gpio_clr = (1 << 22) | (1 << 23) | (1 << 24) | (1 << 25);
+    turn_off_all_leds();
 
     bool should_be_on = false;
     if (system_timer_state == MODE_MANUAL_ADJUST)
@@ -192,28 +197,33 @@ void update_ui_leds_from_main(char stable_key)
     }
     else if (entry_too_large_error)
     {
-        switch (blink_step)
+        switch (blink_step - 1)
         {
-            case 0:
-                sio_hw->gpio_set = (1 << enter_seconds_led);
-                break;
-            case 1:
-                sio_hw->gpio_set = (1 << enter_minutes_led);
-                break;
-            case 2:
-                sio_hw->gpio_set = (1 << enter_hours_led);
-                break;
-            case 3:
-                sio_hw->gpio_set = (1 << enter_days_led);
-                break;
-            case 4:
-            case 6:
-                blink_time_frame();
-                break;
-            case 5:
-            case 7:
-                break;
+        case 0:
+            sio_hw->gpio_set = (1 << enter_seconds_led);
+            break;
+        case 1:
+            sio_hw->gpio_set = (1 << enter_minutes_led);
+            break;
+        case 2:
+            sio_hw->gpio_set = (1 << enter_hours_led);
+            break;
+        case 3:
+            sio_hw->gpio_set = (1 << enter_days_led);
+            break;
+        case 4:
+        case 6:
+            break;
+        case 5:
+            blink_time_frame();
+            break;
+        case 7:
+            blink_time_frame();
+            entry_too_large_error = false;
+            break;
         }
+
+        enter_state = NO_ENTRY;
     }
     else if (system_timer_state == MODE_TIMED_RUN)
     {
@@ -304,6 +314,8 @@ void update_ui_leds_from_main(char stable_key)
             case ENTER_SECONDS:
                 sio_hw->gpio_set = 1 << 25;
                 break;
+            default:
+                break;
             }
         default:
             // Safety state / idle
@@ -376,7 +388,6 @@ void start_new_blink_sequence()
 {
     // Force the clock counter back to 0 so the first cycle begins ON immediately
     blink_step = 0;
-
     // Force an immediate timer interrupt to fire in 50 microseconds
     timer_hw->alarm[state_machine_alarm_num] = timer_hw->timerawl + 50;
 }

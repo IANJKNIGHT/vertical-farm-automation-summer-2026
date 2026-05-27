@@ -32,6 +32,7 @@ enum EnterState
     SAVE_STATE_1,
     SECOND_PRESS,
     SAVE_STATE_2,
+    TOO_BIG
 };
 
 extern enum EnterState enter_state;
@@ -63,6 +64,9 @@ void no_entry_back_state()
     case MODE_TIMED_RUN:
         system_timer_state = ENTER_SECONDS;
         break;
+    case MODE_DEFAULT:
+    case MODE_MANUAL_ADJUST:
+        break;
     }
 }
 
@@ -76,24 +80,6 @@ void noEntryLogic(char stable_key)
         start_new_blink_sequence();
         last_num_entered = stable_key;
         first_num_set = true;
-        break;
-    default:
-        break;
-    }
-}
-
-void firstPressLogic(char stable_key)
-{
-    switch (stable_key)
-    {
-    case '*':
-        enter_state = SAVE_STATE_1;
-        time_type_saved_save_state_1(last_num_entered);
-        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
-        first_num_set = false;
-        break;
-    case 'B':
-        enter_state = NO_ENTRY;
         break;
     default:
         break;
@@ -123,6 +109,24 @@ void time_type_saved_save_state_1(char stable_key)
     }
 }
 
+void firstPressLogic(char stable_key)
+{
+    switch (stable_key)
+    {
+    case '*':
+        enter_state = SAVE_STATE_1;
+        time_type_saved_save_state_1(last_num_entered);
+        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
+        first_num_set = false;
+        break;
+    case 'B':
+        enter_state = NO_ENTRY;
+        break;
+    default:
+        break;
+    }
+}
+
 void save_state_1_logic(char stable_key)
 {
     switch (stable_key)
@@ -140,26 +144,17 @@ void save_state_1_logic(char stable_key)
     }
 }
 
-void secondPressLogic(char stable_key)
+void entry_too_large_logic()
 {
-    switch (stable_key)
-    {
-    case '*':
-        enter_state = SAVE_STATE_2;
-        time_type_saved_save_state_2(last_num_entered);
-        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
-        break;
-    case 'B':
-        enter_state = NO_ENTRY;
-        break;
-    default:
-        break;
-    }
+    entry_too_large_error = true;
+    // printf("HELLO???\n");
+
+    start_new_blink_sequence();
 }
 
 int less_than_59_check(int remaining_time)
 {
-    return (remaining_time > 59) ? 0 : remaining_time;
+    return (remaining_time >= 0 && remaining_time <= 59);
 }
 
 void time_type_saved_save_state_2(char stable_key)
@@ -175,29 +170,77 @@ void time_type_saved_save_state_2(char stable_key)
         break;
     case ENTER_HOURS:
         remaining_hours += remaining_time;
-        if (remaining_hours > 23)
-            remaining_hours = 0;
-        enter_state = NO_ENTRY;
-        entry_too_large_error = true;
-        start_new_blink_sequence();
-
-        enter_state = NO_ENTRY;
-
+        // if (remaining_hours > 23)
+        //     remaining_hours = 0;
+        // enter_state = NO_ENTRY;
+        // entry_too_large_error = true;
+        // start_new_blink_sequence();
         break;
     case ENTER_MINUTES:
         remaining_minutes += remaining_time;
-        if (less_than_59_check(remaining_minutes) == 0)
-        {
-            entry_too_large_logic();
-        }
+        // if (less_than_59_check(remaining_minutes) == 0)
+        // {
+        //     entry_too_large_logic();
+        // }
 
         break;
     case ENTER_SECONDS:
         remaining_seconds_seconds += remaining_time;
-        if (less_than_59_check(remaining_minutes) == 0)
+        // if (less_than_59_check(remaining_minutes) == 0)
+        // {
+        //     entry_too_large_logic();
+        // }
+        break;
+    default:
+        break;
+    }
+}
+
+bool validEntry()
+{
+    printf("Checking_valid\n");
+    switch (system_timer_state)
+    {
+    case ENTER_HOURS:
+        if (remaining_hours > 23)
+        {
+            remaining_hours = 0;
+            printf("invalid\n");
+            entry_too_large_logic();
+            return false;
+        }
+        break;
+    case ENTER_MINUTES:
+        if (!less_than_59_check(remaining_minutes))
+        {
+            // printf("invalid\n");
+            entry_too_large_logic();
+            return false;
+        }
+        break;
+    case ENTER_SECONDS:
+        if ((!less_than_59_check(remaining_seconds_seconds)))
         {
             entry_too_large_logic();
+            return false;
         }
+        break;
+    default:
+        break;
+    }
+    return true;
+}
+void secondPressLogic(char stable_key)
+{
+    switch (stable_key)
+    {
+    case '*':
+        enter_state = SAVE_STATE_2;
+        time_type_saved_save_state_2(last_num_entered);
+        printf("D: %d, H: %d, M: %d, S: %d\n", remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
+        break;
+    case 'B':
+        enter_state = NO_ENTRY;
         break;
     default:
         break;
@@ -233,7 +276,10 @@ void save_state_2_logic(char stable_key)
     case 'D':
         time_val_for_fan_displayed = true;
         start_new_blink_sequence();
-        save2_next_systemTimerState(); // 2. Then transition states safely
+        if (validEntry())
+            save2_next_systemTimerState(); // 2. Then transition states safely
+        // save2_next_systemTimerState(); // 2. Then transition states safely
+
         break;
     case 'B':
         break;
@@ -291,11 +337,4 @@ void debug_system_timer_state()
         printf("Timed\n");
         break;
     }
-}
-
-void entry_too_large_logic()
-{
-    enter_state = NO_ENTRY;
-    entry_too_large_error = true;
-    start_new_blink_sequence();
 }

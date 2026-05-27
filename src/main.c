@@ -62,6 +62,7 @@ enum EnterState
     SAVE_STATE_1,
     SECOND_PRESS,
     SAVE_STATE_2,
+    TOO_BIG
 };
 enum EnterState enter_state = NO_ENTRY;
 
@@ -147,7 +148,8 @@ int main()
             break;
         }
 
-        if (key_event != 0 && system_timer_state != MODE_DEFAULT && system_timer_state != MODE_MANUAL_ADJUST)
+
+        if (key_event != 0 && system_timer_state != MODE_DEFAULT && system_timer_state != MODE_MANUAL_ADJUST && entry_too_large_error == false)
         {
             switch (enter_state)
             {
@@ -166,9 +168,14 @@ int main()
             case SAVE_STATE_2:
                 save_state_2_logic(current_key_snapshot);
                 break;
-            case ENTRY_TOO_LARGE:
-                entry_too_large_logic();
+            default:
+                // printf("TOO BIG\n");
+                break;
             }
+        }
+        if (enter_state == TOO_BIG)
+        {
+            start_new_blink_sequence();
         }
         current_key_snapshot = first_num_set == true ? last_num_entered : current_key_snapshot;
         update_ui_leds_from_main(current_key_snapshot);
