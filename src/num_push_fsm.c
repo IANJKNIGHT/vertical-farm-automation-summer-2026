@@ -1,5 +1,6 @@
 #include "queue.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include "pico/stdlib.h"
 #include "hardware/timer.h"
 #include "hardware/irq.h"
@@ -11,6 +12,8 @@ extern char last_num_entered;
 volatile uint8_t blink_step = 0; // Tracks our current position in time
 extern bool time_val_for_fan_displayed;
 extern bool first_num_set;
+extern absolute_time_t mode_switch_time_remaining_to_set;
+
 
 enum SystemTimerState
 {
@@ -42,7 +45,20 @@ extern int remaining_hours;
 extern int remaining_minutes;
 extern int remaining_seconds_seconds;
 extern bool entry_too_large_error; // when the entered time is greater than 23 hours or 59 min/seconds
+extern bool time_interval_head_set = false;
 void start_new_blink_sequence();
+
+void setTimeIntervals()
+{
+    if (!time_interval_head_set)
+    {
+        switch (key_char)
+        {
+            case 'A':
+                
+        }
+    }
+}
 
 void no_entry_back_state()
 {
@@ -205,7 +221,6 @@ bool validEntry()
         if (remaining_hours > 23)
         {
             remaining_hours = 0;
-            printf("invalid\n");
             entry_too_large_logic();
             return false;
         }
@@ -278,6 +293,10 @@ void save_state_2_logic(char stable_key)
         start_new_blink_sequence();
         if (validEntry())
             save2_next_systemTimerState(); // 2. Then transition states safely
+            if (system_timer_state == MODE_TIMED_RUN)
+            {
+                mode_switch_time_remaining_to_set = get_absolute_time();
+            }
         // save2_next_systemTimerState(); // 2. Then transition states safely
 
         break;
