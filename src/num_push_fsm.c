@@ -14,11 +14,11 @@ extern bool time_val_for_fan_displayed;
 extern bool first_num_set;
 extern absolute_time_t mode_switch_time_remaining_to_set;
 
-
 enum SystemTimerState
 {
     MODE_DEFAULT,
     MODE_MANUAL_ADJUST,
+    SEL_TIME_VALS,
     ENTER_DAYS,
     ENTER_HOURS,
     ENTER_MINUTES,
@@ -46,18 +46,70 @@ extern int remaining_minutes;
 extern int remaining_seconds_seconds;
 extern bool entry_too_large_error; // when the entered time is greater than 23 hours or 59 min/seconds
 extern bool time_interval_head_set = false;
+extern bool linked_list_set;
+struct timerInterval 
+{
+    enum SystemTimerState timer_state;
+    struct timerInterval *next;
+};
+extern struct timerInterval * timer_interval_head;
+struct timerInterval * next;
+char possible_inputs_array[5] = {'A', 'B', 'C', 'D'};
+enum SystemTimerState possible_states_arr[4] = {ENTER_DAYS, ENTER_HOURS, ENTER_MINUTES, ENTER_SECONDS};
+extern int timer_interval_index;
+int set_idx = 4;
 void start_new_blink_sequence();
 
 void setTimeIntervals()
 {
     if (!time_interval_head_set)
     {
-        switch (key_char)
+        for (int timer_int_idx = 0; timer_int_idx <= 3; timer_int_idx++)
         {
-            case 'A':
-                
+            if (key_char == possible_inputs_array[timer_int_idx])
+            {
+                timer_interval_head->timer_state = possible_states_arr[timer_int_idx];
+                timer_interval_index = timer_int_idx + 1;
+            }
+        }
+        next = NULL;
+        timer_interval_head->next = next;
+        time_interval_head_set = true;
+    }
+    else if (key_pop != 0 && time_interval_head_set== true)
+    {
+        if (next == NULL)
+        {
+            next = (struct timerInterval *) malloc(sizeof(struct timerInterval));
+            next->next = NULL;
+        }
+        else 
+        {
+            while (next->next != NULL)
+            {
+                next = next->next;
+            }
+            if (set_idx == timer_interval_index)
+            {
+                linked_list_set = true;
+            }
+            else
+            {
+                next = next->next;
+                next = (struct timerInterval *) malloc(sizeof(struct timerInterval));
+                next->next = NULL;
+            }
+        }
+        int temp_index = timer_interval_index;
+        while (temp_index <set_idx && possible_inputs_array[timer_interval_index - 1] != key_char )
+        {
+            if (possible_inputs_array[timer_interval_index] == key_char)
+            {
+                next->timer_state = possible_states_arr[timer_interval_index];
+            }
         }
     }
+
 }
 
 void no_entry_back_state()

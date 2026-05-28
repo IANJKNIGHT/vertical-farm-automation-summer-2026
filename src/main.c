@@ -32,6 +32,7 @@ uint16_t key_event = 0;
 int key_event_count = 0;
 char last_num_entered = '\0';
 bool first_num_set = false;
+bool linked_list_set = false;
 
 volatile uint16_t *completed_raw_buffer;
 absolute_time_t mode_switch_time_remaining_to_set;
@@ -78,6 +79,7 @@ struct timerInterval
 struct timerInterval * timer_interval_head = NULL;
 bool head_memory_allocated_4_timer = false;
 enum SystemTimerState firstTimerState;
+int timer_interval_index = 0;
 
 void init_adc_combined_freerun();
 void init_state_machine_led();
