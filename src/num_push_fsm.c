@@ -45,71 +45,143 @@ extern int remaining_hours;
 extern int remaining_minutes;
 extern int remaining_seconds_seconds;
 extern bool entry_too_large_error; // when the entered time is greater than 23 hours or 59 min/seconds
-extern bool time_interval_head_set = false;
+extern bool time_interval_head_set;
 extern bool linked_list_set;
-struct timerInterval 
+struct timerInterval
 {
     enum SystemTimerState timer_state;
     struct timerInterval *next;
 };
-extern struct timerInterval * timer_interval_head;
-struct timerInterval * next;
+extern struct timerInterval *timer_interval_head;
+struct timerInterval *next;
 char possible_inputs_array[5] = {'A', 'B', 'C', 'D'};
 enum SystemTimerState possible_states_arr[4] = {ENTER_DAYS, ENTER_HOURS, ENTER_MINUTES, ENTER_SECONDS};
 extern int timer_interval_index;
 int set_idx = 4;
 void start_new_blink_sequence();
 
+void printCurrentState(struct timerInterval *current_interval_entry)
+{
+    switch (current_interval_entry->timer_state)
+    {
+    case ENTER_DAYS:
+        printf("Only state: Days\n");
+        break;
+
+    case ENTER_HOURS:
+        printf("Only state: Hrs\n");
+        break;
+
+    case ENTER_MINUTES:
+        printf("Only state: Mins\n");
+        break;
+
+    case ENTER_SECONDS:
+        printf("Only state: Secs\n");
+        break;
+    default:
+        break;
+    }
+}
+
+void printConfiguredIntervals()
+{
+    printf("\n--- CURRENT CONFIGURATION CHAIN ---\n");
+    if (timer_interval_head == NULL)
+    {
+        printf("List is empty!\n");
+        printf("------------------------------------\n\n");
+        return;
+    }
+
+    struct timerInterval *temp = timer_interval_head;
+    int position = 1;
+    while (temp != NULL)
+    {
+        printf("[%d] ", position++);
+        printCurrentState(temp);
+        temp = temp->next; // Move safely down the line
+    }
+    printf("------------------------------------\n\n");
+}
+
 void setTimeIntervals()
 {
-    if (!time_interval_head_set)
+    // If the user presses '#' again, it means they are done choosing intervals
+    if (key_char == '#')
     {
-        for (int timer_int_idx = 0; timer_int_idx <= 3; timer_int_idx++)
+        linked_list_set = true;
+
+        printConfiguredIntervals();
+        if (timer_interval_head != NULL)
         {
-            if (key_char == possible_inputs_array[timer_int_idx])
-            {
-                timer_interval_head->timer_state = possible_states_arr[timer_int_idx];
-                timer_interval_index = timer_int_idx + 1;
-            }
+            system_timer_state = timer_interval_head->timer_state;
+            enter_state = NO_ENTRY;
         }
-        next = NULL;
-        timer_interval_head->next = next;
-        time_interval_head_set = true;
+        else
+        {
+            // Safe fallback if they pressed # without choosing any intervals
+            system_timer_state = MODE_DEFAULT;
+        }
+        return;
     }
-    else if (key_pop != 0 && time_interval_head_set== true)
+
+    // Match the key pressed to our available time states
+    int found_idx = -1;
+    for (int i = 0; i < 4; i++)
     {
-        if (next == NULL)
+        printf("key_char = %c and current_arr_input = %c\n", key_char, possible_inputs_array[i]);
+        if (key_char == possible_inputs_array[i])
         {
-            next = (struct timerInterval *) malloc(sizeof(struct timerInterval));
-            next->next = NULL;
-        }
-        else 
-        {
-            while (next->next != NULL)
-            {
-                next = next->next;
-            }
-            if (set_idx == timer_interval_index)
-            {
-                linked_list_set = true;
-            }
-            else
-            {
-                next = next->next;
-                next = (struct timerInterval *) malloc(sizeof(struct timerInterval));
-                next->next = NULL;
-            }
-        }
-        int temp_index = timer_interval_index;
-        while (temp_index <set_idx && possible_inputs_array[timer_interval_index - 1] != key_char )
-        {
-            if (possible_inputs_array[timer_interval_index] == key_char)
-            {
-                next->timer_state = possible_states_arr[timer_interval_index];
-            }
+            found_idx = i;
+            break;
         }
     }
 
+    // Allocate and append only if it's a valid dynamic selection (A, B, C, or D)
+    if (found_idx != -1)
+    {
+        struct timerInterval *newNode = (struct timerInterval *)malloc(sizeof(struct timerInterval));
+        if (newNode == NULL)
+            return; // Heap safety check
+
+        newNode->timer_state = possible_states_arr[found_idx];
+        newNode->next = NULL;
+
+        if (!time_interval_head_set)
+        {
+            timer_interval_head = newNode;
+            time_interval_head_set = true;
+        }
+        else
+        {
+            struct timerInterval *temp = timer_interval_head;
+            while (temp->next != NULL)
+            {
+                temp = temp->next;
+            }
+            temp->next = newNode;
+        }
+        printf("Added Interval State: %d\n", newNode->timer_state);
+    }
+}
+
+void destroyList()
+{
+    struct timerInterval *temp = timer_interval_head;
+
+    // Check if temp itself is NULL BEFORE looking inside it
+    while (temp != NULL)
+    {
+        struct timerInterval *next_node = temp->next; // Safely look ahead while temp is valid
+        printCurrentState(temp);
+        free(temp);       // Safely delete current
+        temp = next_node; // Advance
+    }
+
+    // Reset control variables so we don't try to use freed memory
+    timer_interval_head = NULL;
+    time_interval_head_set = false;
 }
 
 void no_entry_back_state()
@@ -345,10 +417,10 @@ void save_state_2_logic(char stable_key)
         start_new_blink_sequence();
         if (validEntry())
             save2_next_systemTimerState(); // 2. Then transition states safely
-            if (system_timer_state == MODE_TIMED_RUN)
-            {
-                mode_switch_time_remaining_to_set = get_absolute_time();
-            }
+        if (system_timer_state == MODE_TIMED_RUN)
+        {
+            mode_switch_time_remaining_to_set = get_absolute_time();
+        }
         // save2_next_systemTimerState(); // 2. Then transition states safely
 
         break;
@@ -391,6 +463,9 @@ void debug_system_timer_state()
         break;
     case MODE_MANUAL_ADJUST:
         printf("Man\n");
+        break;
+    case SEL_TIME_VALS:
+        printf("Vals\n");
         break;
     case ENTER_DAYS:
         printf("Days\n");

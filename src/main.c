@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/timer.h"
@@ -70,13 +71,13 @@ enum EnterState
     TOO_BIG
 };
 enum EnterState enter_state = NO_ENTRY;
-struct timerInterval 
+struct timerInterval
 {
     enum SystemTimerState timer_state;
     struct timerInterval *next;
 };
 
-struct timerInterval * timer_interval_head = NULL;
+struct timerInterval *timer_interval_head = NULL;
 bool head_memory_allocated_4_timer = false;
 enum SystemTimerState firstTimerState;
 int timer_interval_index = 0;
@@ -97,6 +98,10 @@ void update_ui_leds_from_main(char stable_key);
 void save_state_2_logic();
 void debug_enter_state();
 void debug_system_timer_state();
+void setTimeIntervals();
+void destroyList();
+void printConfiguredIntervals();
+;
 uint32_t enter_timed_run_first_state();
 uint32_t enter_timed_run_second_state();
 // ///////////////////////////////////////////////////////////////////
@@ -109,7 +114,7 @@ int main()
 
     // Wait 3 seconds after boot so you can open your serial monitor in time
     sleep_ms(3000);
-    
+
     absolute_time_t last_key_press_time = get_absolute_time();
     // int duty_period[2];
 
@@ -158,24 +163,28 @@ int main()
             set_duty = adc_fan_speed_control[0] * 100 / 4095;
             switch (key_char)
             {
-                case '#': 
-                    system_timer_state = SEL_TIME_VALS;
-                    if (!head_memory_allocated_4_timer)
-                    {
-                        timer_interval_head->timer_state = (struct timerInterval *) malloc(sizeof(struct timerInterval));
-                        head_memory_allocated_4_timer = true;
-                    }
-                case 'B':
-                    system_timer_state = MODE_DEFAULT;
-                    break;
-
+            case '#':
+                system_timer_state = SEL_TIME_VALS;
+                break;
+            case 'B':
+                system_timer_state = MODE_DEFAULT;
+                break;
             }
             system_timer_state = (key_char == '#') ? SEL_TIME_VALS : (key_char == 'B') ? MODE_DEFAULT
-                                                                                    : MODE_MANUAL_ADJUST;
-            
+                                                                                       : MODE_MANUAL_ADJUST;
             break;
         case SEL_TIME_VALS:
-            
+            if (!linked_list_set && key_event != 0)
+            {
+                setTimeIntervals();
+            }
+            else if (linked_list_set == true && key_char == 'B')
+            {
+                system_timer_state = MODE_DEFAULT;
+                destroyList();
+            }
+
+            break;
         case MODE_TIMED_RUN:
             if (absolute_time_diff_us(mode_switch_time_remaining_to_set, get_absolute_time()) >= 1000000)
             {
@@ -184,9 +193,9 @@ int main()
 
                 // 2. Collapse everything into a single, comprehensive pool of total remaining seconds
                 uint32_t total_remaining_seconds = remaining_seconds_seconds +
-                                                (remaining_minutes * 60) +
-                                                (remaining_hours * 3600) +
-                                                (remaining_days * 86400);
+                                                   (remaining_minutes * 60) +
+                                                   (remaining_hours * 3600) +
+                                                   (remaining_days * 86400);
 
                 // 3. Decrement the clock by exactly 1 second if time hasn't completely run out
                 if (total_remaining_seconds > 0)
@@ -194,30 +203,29 @@ int main()
                     total_remaining_seconds--;
 
                     // 4. Extract the newly updated time divisions back out of our unified seconds pool
-                    remaining_days            = total_remaining_seconds / 86400;
-                    uint32_t days_remainder   = total_remaining_seconds % 86400;
+                    remaining_days = total_remaining_seconds / 86400;
+                    uint32_t days_remainder = total_remaining_seconds % 86400;
 
-                    remaining_hours           = days_remainder / 3600;
-                    uint32_t hours_remainder  = days_remainder % 3600;
+                    remaining_hours = days_remainder / 3600;
+                    uint32_t hours_remainder = days_remainder % 3600;
 
-                    remaining_minutes         = hours_remainder / 60;
+                    remaining_minutes = hours_remainder / 60;
                     remaining_seconds_seconds = hours_remainder % 60;
                 }
                 else
                 {
                     system_timer_state == MODE_DEFAULT;
                 }
-            
-            // Optional diagnostics printout to check your work in the serial console
-                printf("Countdown -> D:%d H:%02d M:%02d S:%02d\n", 
-                        remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
+
+                // Optional diagnostics printout to check your work in the serial console
+                printf("Countdown -> D:%d H:%02d M:%02d S:%02d\n",
+                       remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
                 mode_switch_time_remaining_to_set = get_absolute_time();
             }
 
         default:
             break;
         }
-
 
         if (key_event != 0 && system_timer_state != MODE_DEFAULT && system_timer_state != MODE_MANUAL_ADJUST && entry_too_large_error == false)
         {
