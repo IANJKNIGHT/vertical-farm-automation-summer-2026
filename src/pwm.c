@@ -26,6 +26,7 @@ void pwm_control()
     int current_period = pwm_hw->slice[slice_GP37_num].top;
 
     // CRITICAL FIX: Pass pwm_gpio_to_channel(37) instead of 0 to target Channel B!
+    pwm_hw->slice[slice_GP37_num].div = 1250; // 1 kHz PWM frequency with 1250 divider (assuming 125 MHz clock)
     pwm_set_chan_level(slice_GP37_num, pwm_gpio_to_channel(37), duty_cycle * current_period / 100);
 }
 

@@ -46,11 +46,12 @@ extern int remaining_minutes;
 extern int remaining_seconds_seconds;
 extern bool entry_too_large_error; // when the entered time is greater than 23 hours or 59 min/seconds
 extern bool time_interval_head_set;
-extern bool linked_list_set;
+extern bool linked_list_set; 
 struct timerInterval
 {
     enum SystemTimerState timer_state;
     struct timerInterval *next;
+    struct timerInterval *prev;
 };
 extern struct timerInterval *timer_interval_head;
 struct timerInterval *next;
@@ -130,7 +131,7 @@ void setTimeIntervals()
     int found_idx = -1;
     for (int i = 0; i < 4; i++)
     {
-        printf("key_char = %c and current_arr_input = %c\n", key_char, possible_inputs_array[i]);
+        // printf("key_char = %c and current_arr_input = %c\n", key_char, possible_inputs_array[i]);
         if (key_char == possible_inputs_array[i])
         {
             found_idx = i;
@@ -151,6 +152,7 @@ void setTimeIntervals()
         if (!time_interval_head_set)
         {
             timer_interval_head = newNode;
+            timer_interval_head->prev = NULL;
             time_interval_head_set = true;
         }
         else
@@ -161,20 +163,47 @@ void setTimeIntervals()
                 temp = temp->next;
             }
             temp->next = newNode;
+            temp->next->prev = temp;
         }
-        printf("Added Interval State: %d\n", newNode->timer_state);
+        // printf("Added Interval State: %d\n", newNode->timer_state);
     }
 }
+
+// void setTransitionStates()
+// {
+//     struct timerInterval * temp = timer_interval_head;
+//     if (temp == NULL)
+//     {
+//         return;
+//     }
+//     else if (temp->next == NULL)
+//     {
+//         switch(temp->timer_state)
+//         {
+//             case ENTER_DAYS:
+//                 after_enter_days_state = MODE_TIMED_RUN;
+//                 break;
+//             case ENTER_HOURS:
+//                 before_enter_hrs_state = MODE_MANUAL_ADJUST;
+//                 after_enter_hrs_state = MODE_TIMED_RUN;
+//                 break;
+//             case ENTER_MINUTES:
+//                 before_enter_hrs_state = MODE_MANUAL_ADJUST;
+//                 after_enter_hrs_state = MODE_TIMED_RUN;
+//             case ENTER_SECONDS:
+//                 before
+//         }
+//     }
+// }
 
 void destroyList()
 {
     struct timerInterval *temp = timer_interval_head;
-
     // Check if temp itself is NULL BEFORE looking inside it
     while (temp != NULL)
     {
         struct timerInterval *next_node = temp->next; // Safely look ahead while temp is valid
-        printCurrentState(temp);
+        // printCurrentState(temp);
         free(temp);       // Safely delete current
         temp = next_node; // Advance
     }
@@ -184,45 +213,107 @@ void destroyList()
     time_interval_head_set = false;
 }
 
-void no_entry_back_state()
+struct timerInterval * findTimeEntryType()
 {
-    enter_state = NO_ENTRY;
-    switch (system_timer_state)
+    if (timer_interval_head == NULL)
     {
-    case ENTER_DAYS:
-        system_timer_state = MODE_MANUAL_ADJUST;
-        break;
-    case ENTER_HOURS:
-        system_timer_state = ENTER_DAYS;
-        break;
-    case ENTER_MINUTES:
-        system_timer_state = ENTER_HOURS;
-        break;
-    case ENTER_SECONDS:
-        system_timer_state = ENTER_MINUTES;
-        break;
-    case MODE_TIMED_RUN:
-        system_timer_state = ENTER_SECONDS;
-        break;
-    case MODE_DEFAULT:
-    case MODE_MANUAL_ADJUST:
-        break;
+        return NULL;
+    }
+    else 
+    {
+        struct timerInterval *temp = timer_interval_head; // holds head value to be able to move
+        while (system_timer_state != temp->timer_state && temp->next != NULL)
+        {
+            temp = temp->next;
+        }
+        if (system_timer_state == temp->timer_state)
+        {
+            return temp;
+        }
+        else 
+        {
+            return NULL;
+        }
     }
 }
+
+// void save2_next_systemTimerState(bool forward): moves user to the next or previous system_timer_state based toggling bool forward to true or false
+// args: bool forward - moves to the next state (true), previous state (false)
+void save2_next_systemTimerState(bool forward)
+{
+    struct timerInterval *temp = findTimeEntryType();
+    if (temp == NULL)
+    {
+        system_timer_state = MODE_DEFAULT;
+    }
+    else if (forward)
+    {
+        if (temp->next != NULL)
+        {
+            system_timer_state = temp->next->timer_state;
+        }
+        else
+        {
+            system_timer_state = MODE_TIMED_RUN;
+            destroyList();
+        }
+    }
+    else 
+    {
+        if (temp->prev != NULL)
+        {
+            system_timer_state = temp->prev->timer_state;
+        }
+        else
+        {
+            system_timer_state = MODE_MANUAL_ADJUST;
+            destroyList();
+        }
+    }
+}
+
+// void no_entry_back_state()
+// {
+//     enter_state = NO_ENTRY;
+//     switch (system_timer_state)
+//     {
+//     case ENTER_DAYS:
+//         system_timer_state = MODE_MANUAL_ADJUST;
+//         break;
+//     case ENTER_HOURS:
+//         system_timer_state = ENTER_DAYS;
+//         break;
+//     case ENTER_MINUTES:
+//         system_timer_state = ENTER_HOURS;
+//         break;
+//     case ENTER_SECONDS:
+//         system_timer_state = ENTER_MINUTES;
+//         break;
+//     case MODE_TIMED_RUN:
+//         system_timer_state = ENTER_SECONDS;
+//         break;
+//     case MODE_DEFAULT:
+//     case MODE_MANUAL_ADJUST:
+//         break;
+//     }
+// }
 
 void noEntryLogic(char stable_key)
 {
 
     switch (stable_key)
     {
-    case '0' ... '9':
-        enter_state = FIRST_PRESS;
-        start_new_blink_sequence();
-        last_num_entered = stable_key;
-        first_num_set = true;
-        break;
-    default:
-        break;
+        case '0' ... '9':
+            enter_state = FIRST_PRESS;
+            start_new_blink_sequence();
+            last_num_entered = stable_key;
+            first_num_set = true;
+            break;
+        case 'B':
+            save2_next_systemTimerState(false);
+            break;
+        default:
+            break;
     }
 }
 
@@ -369,6 +460,7 @@ bool validEntry()
     }
     return true;
 }
+
 void secondPressLogic(char stable_key)
 {
     switch (stable_key)
@@ -386,26 +478,32 @@ void secondPressLogic(char stable_key)
     }
 }
 
-void save2_next_systemTimerState()
-{
-    switch (system_timer_state)
-    {
-    case ENTER_DAYS:
-        system_timer_state = ENTER_HOURS;
-        break;
-    case ENTER_HOURS:
-        system_timer_state = ENTER_MINUTES;
-        break;
-    case ENTER_MINUTES:
-        system_timer_state = ENTER_SECONDS;
-        break;
-    case ENTER_SECONDS:
-        system_timer_state = MODE_TIMED_RUN;
-        break;
-    default:
-        break;
-    }
-}
+
+// void save2_next_systemTimerState(struct timerInterval * chosen_intervals) chooses the next enter_state based on the values in the linkedlist
+// arguments: struct timerInterval * chosen_intervals stores the chosen states from the user input representing some sequence of 'A', 'B', 'C', 'D' corresponding to D, H, M, S
+// switch
+// void save2_next_systemTimerState()
+// {
+//     switch (system_timer_state)
+//     {
+//     case ENTER_DAYS:
+//         system_timer_state = after_enter_days_state;
+//         break;
+//     case ENTER_HOURS:
+//         system_timer_state = after_enter_hrs_state;
+//         break;
+//     case ENTER_MINUTES:
+//         system_timer_state = after_enter_mins_state;
+//         break;
+//     case ENTER_SECONDS:
+//         system_timer_state = MODE_TIMED_RUN;
+//         break;
+//     default:
+//         break;
+//     }
+// }
+// struct timerInterval * findTimeEntryType(): returns the Node that stores the current position of where the user is entering the time
+
 
 void save_state_2_logic(char stable_key)
 {
@@ -416,7 +514,7 @@ void save_state_2_logic(char stable_key)
         time_val_for_fan_displayed = true;
         start_new_blink_sequence();
         if (validEntry())
-            save2_next_systemTimerState(); // 2. Then transition states safely
+            save2_next_systemTimerState(true); // 2. Then transition states safely
         if (system_timer_state == MODE_TIMED_RUN)
         {
             mode_switch_time_remaining_to_set = get_absolute_time();

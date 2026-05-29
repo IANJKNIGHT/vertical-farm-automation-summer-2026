@@ -75,13 +75,24 @@ struct timerInterval
 {
     enum SystemTimerState timer_state;
     struct timerInterval *next;
+    struct timerInterval *prev;
 };
 
 struct timerInterval *timer_interval_head = NULL;
 bool head_memory_allocated_4_timer = false;
 enum SystemTimerState firstTimerState;
 int timer_interval_index = 0;
-
+struct nv_recovery_t
+{
+    uint32_t magic_number;       // Signature validation tag (0xDEADBEEF)
+    uint32_t set_duty;           // Fan duty cycle
+    int32_t  remaining_days;
+    int32_t  remaining_hours;
+    int32_t  remaining_minutes;
+    int32_t  remaining_seconds;
+    uint8_t  padding[232];       // Pads struct to exactly 256 bytes (1 Page)
+} nv_recovery_t;
+void measure_duty_cycle_period(uint16_t *adc_result, int *duty_period);
 void init_adc_combined_freerun();
 void init_state_machine_led();
 void init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
@@ -101,6 +112,7 @@ void debug_system_timer_state();
 void setTimeIntervals();
 void destroyList();
 void printConfiguredIntervals();
+extern struct timerInterval *findTimeEntryType();
 ;
 uint32_t enter_timed_run_first_state();
 uint32_t enter_timed_run_second_state();
@@ -112,11 +124,33 @@ int main()
 {
     stdio_init_all();
 
+    // Define global states variables locally for context representation
+    // int remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds;
+    // uint32_t current_duty_cycle;
+
+    // nv_recovery_t saved_state;
+    
+    // if (load_state_from_flash(&saved_state)) {
+    //     printf("Power loss recovery detected! Restoring last operation parameters...\n");
+    //     current_duty_cycle        = saved_state.set_duty;
+    //     remaining_days            = saved_state.remaining_days;
+    //     remaining_hours           = saved_state.remaining_hours;
+    //     remaining_minutes          = saved_state.remaining_minutes;
+    //     remaining_seconds_seconds = saved_state.remaining_seconds;
+    // } else {
+    //     printf("Cold boot identified. Booting up with generic runtime options...\n");
+    //     current_duty_cycle        = 0;
+    //     remaining_days            = 0;
+    //     remaining_hours           = 0;
+    //     remaining_minutes          = 0;
+    //     remaining_seconds_seconds = 0;
+    // }
+
     // Wait 3 seconds after boot so you can open your serial monitor in time
     sleep_ms(3000);
 
     absolute_time_t last_key_press_time = get_absolute_time();
-    // int duty_period[2];
+    int duty_period[2];
 
     // 1. Hardware & Driver Initializations
     init_adc_combined_freerun();
@@ -152,7 +186,7 @@ int main()
         switch (system_timer_state)
         {
         case MODE_DEFAULT:
-            duty_cycle = 50;
+            duty_cycle = 20;
             if (key_char == 'A')
             {
                 system_timer_state = MODE_MANUAL_ADJUST;
@@ -178,11 +212,17 @@ int main()
             {
                 setTimeIntervals();
             }
-            else if (linked_list_set == true && key_char == 'B')
+
+            if (linked_list_set && timer_interval_head != NULL)
             {
-                system_timer_state = MODE_DEFAULT;
-                destroyList();
+                system_timer_state = timer_interval_head->timer_state;
             }
+
+            // else if (linked_list_set == true && key_char == 'B')
+            // {
+            //     system_timer_state = MODE_DEFAULT;
+            //     destroyList();
+            // }
 
             break;
         case MODE_TIMED_RUN:
@@ -214,7 +254,7 @@ int main()
                 }
                 else
                 {
-                    system_timer_state == MODE_DEFAULT;
+                    system_timer_state = MODE_DEFAULT;
                 }
 
                 // Optional diagnostics printout to check your work in the serial console
@@ -222,7 +262,7 @@ int main()
                        remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds);
                 mode_switch_time_remaining_to_set = get_absolute_time();
             }
-
+            break;
         default:
             break;
         }
@@ -282,7 +322,8 @@ int main()
                 else if (system_timer_state == MODE_MANUAL_ADJUST)
                 {
                     duty_cycle = adc_fan_speed_control[0] * 100 / 4095;
-                    // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
+                    measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
+                    printf("Duty Cycle: %d\r", duty_cycle);
                 }
                 else
                 {
