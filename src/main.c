@@ -82,15 +82,16 @@ struct timerInterval *timer_interval_head = NULL;
 bool head_memory_allocated_4_timer = false;
 enum SystemTimerState firstTimerState;
 int timer_interval_index = 0;
+
 struct nv_recovery_t
 {
-    uint32_t magic_number;       // Signature validation tag (0xDEADBEEF)
-    uint32_t set_duty;           // Fan duty cycle
-    int32_t  remaining_days;
-    int32_t  remaining_hours;
-    int32_t  remaining_minutes;
-    int32_t  remaining_seconds;
-    uint8_t  padding[232];       // Pads struct to exactly 256 bytes (1 Page)
+    uint32_t magic_number; // Signature validation tag (0xDEADBEEF)
+    uint32_t set_duty;     // Fan duty cycle
+    int32_t remaining_days;
+    int32_t remaining_hours;
+    int32_t remaining_minutes;
+    int32_t remaining_seconds;
+    uint8_t padding[232]; // Pads struct to exactly 256 bytes (1 Page)
 } nv_recovery_t;
 void measure_duty_cycle_period(uint16_t *adc_result, int *duty_period);
 void init_adc_combined_freerun();
@@ -112,6 +113,8 @@ void debug_system_timer_state();
 void setTimeIntervals();
 void destroyList();
 void printConfiguredIntervals();
+void init_read_rpm_pwm();
+uint16_t get_raw_pwm_counter_value();
 extern struct timerInterval *findTimeEntryType();
 ;
 uint32_t enter_timed_run_first_state();
@@ -129,7 +132,7 @@ int main()
     // uint32_t current_duty_cycle;
 
     // nv_recovery_t saved_state;
-    
+
     // if (load_state_from_flash(&saved_state)) {
     //     printf("Power loss recovery detected! Restoring last operation parameters...\n");
     //     current_duty_cycle        = saved_state.set_duty;
@@ -159,9 +162,14 @@ int main()
     init_state_machine_led();
     init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
     init_pwm_irq();
+    init_read_rpm_pwm();
 
     // 3. Claim the master DMA channel from the system pool
     dma_master_chan = dma_claim_unused_channel(true);
+    absolute_time_t next_rpm_sample_time;
+    uint16_t last_edge_count = 0;
+    int cached_rpm = 0;
+    next_rpm_sample_time = make_timeout_time_ms(500);
 
     // 4. Synchronize and Kick Off Background Tasks
     // This starts the DMA channel first, then releases the ADC clock loop
@@ -298,42 +306,48 @@ int main()
         current_key_snapshot = first_num_set == true ? last_num_entered : current_key_snapshot;
         update_ui_leds_from_main(current_key_snapshot);
 
+        if (time_reached(next_rpm_sample_time))
+        {
+            next_rpm_sample_time = make_timeout_time_ms(500); // Sample every half-second
+
+            uint16_t current_edge_count = get_raw_pwm_counter_value();
+
+            // Explicitly handle 16-bit register rollover protection math safely
+            uint16_t delta_edges = current_edge_count - last_edge_count;
+            last_edge_count = current_edge_count;
+
+            // Math: We sampled for 500ms (1/2 of a second).
+            // delta_edges * 2 = Edges per second.
+            // (Edges per second / 2 pulses per rev) * 60 seconds = RPM
+            // Simplified Math: delta_edges * 60
+            cached_rpm = delta_edges * 60;
+        }
+
         if (master_buffer_ready)
         {
             master_buffer_ready = false;
-
-            // CRITICAL UPDATE: Extract from the safe atomic pointer snapshot
             uint16_t *raw_data = (uint16_t *)completed_raw_buffer;
 
-            // Fallback protection just in case main loops before an IRQ finishes
             if (raw_data != NULL)
             {
                 for (int i = 0; i < NUM_SAMPLES; i++)
                 {
-                    adc_duty_cycle_result[i] = raw_data[2 * i];     // Channel 2
-                    adc_fan_speed_control[i] = raw_data[2 * i + 1]; // Channel 5
+                    adc_duty_cycle_result[i] = raw_data[2 * i];
+                    adc_fan_speed_control[i] = raw_data[2 * i + 1];
                 }
 
-                // Your math / duty logic remains here...
-
-                if (system_timer_state == MODE_DEFAULT)
-                {
-                }
-                else if (system_timer_state == MODE_MANUAL_ADJUST)
+                if (system_timer_state == MODE_MANUAL_ADJUST)
                 {
                     duty_cycle = adc_fan_speed_control[0] * 100 / 4095;
                     measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
-                    printf("Duty Cycle: %d\r", duty_cycle);
+
+                    // Print the cached value instantly with ZERO cycle delays!
+                    printf("Duty Cycle: %d | Measured RPM: %d\r", duty_cycle, cached_rpm);
                 }
-                else
-                {
-                    duty_cycle = set_duty;
-                }
+                // ... rest of state assignment paths ...
             }
         }
-
         fflush(stdout);
     }
-
     return 0;
 }

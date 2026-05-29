@@ -14,8 +14,12 @@
 #define ALARM1_IRQ timer_hardware_alarm_get_irq_num(timer_hw, ALARM1_NUM)
 
 extern char key_char;
+static int num_edges = 0;
+static uint64_t rpm_1_rising_edge;
+static uint64_t rpm_4_rising_edge;
+extern uint64_t measured_rpm;
 int buttonA_col_gpio = 4;
-int vfg_gpio = 30;
+int vfg_gpio = 31;
 static int vfg_pwm_freq_alarm_num = -1;
 enum SystemTimerState
 {
@@ -69,45 +73,27 @@ void init_set_mode()
 }
 
 // 
+static uint pwm_slice_num;
 
+void init_read_rpm_pwm() {
+    // 1. Tell the RP2350 that this pin is controlled by the PWM peripheral block, not the GPIO block
+    gpio_set_function(vfg_gpio, GPIO_FUNC_PWM);
+    gpio_pull_up(vfg_gpio);
+    
+    // Find out which hardware PWM slice is tied to your physical Pin 30
+    pwm_slice_num = pwm_gpio_to_slice_num(vfg_gpio);
 
-void init_count_calculate_rpm()
-{
-    // Set the alarm to trigger every 1 second (1000 ms)
-    vfg_pwm_freq_alarm_num = hardware_alarm_claim_unused(true);
+    // 2. Configure the slice to run as a counter measuring RISING edges
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv_mode(&config, PWM_DIV_B_RISING); // Count rising edges on the B pin
+    
 
-    uint irq_num = TIMER0_IRQ_0 + vfg_pwm_freq_alarm_num;
-
-    hw_set_bits(&timer_hw->inte, 1u << vfg_pwm_freq_alarm_num);
-
-    irq_set_exclusive_handler(irq_num, );
+    pwm_config_set_wrap(&config, 0xFFFF); // Max out the wrap so we can count as many edges as possible before it rolls over
+    // Initialize the hardware block with our configuration parameters
+    pwm_init(pwm_slice_num, &config, true);
+    // pwm_set_enabled(pwm_slice_num, true);
 }
 
-void read_pwm_handler()
-{
-    // Clear the interrupt flag for the GPIO pin
-    uint32_t mask = 1u << (vfg_gpio & 0x1fu);
-    gpio_acknowledge_irq(vfg_gpio, mask);
-
-    // Read the current state of the GPIO pin to determine if it's a rising edge
-    if (gpio_get(vfg_gpio))
-    {
-        // Handle the rising edge event (e.g., read PWM value, update state, etc.)
-        // For demonstration, we'll just print a message
-        
-    }
+uint16_t get_raw_pwm_counter_value() {
+    return pwm_get_counter(pwm_slice_num);
 }
-
-void init_read_pwm()
-{
-    uint32_t mask = 1u << (vfg_gpio & 0x1fu);
-    gpio_init(vfg_gpio);
-    gpio_set_dir(vfg_gpio, GPIO_IN);
-    gpio_pull_down(vfg_gpio);
-
-    gpio_set_exclusive_irq_handler(vfg_gpio, &read_pwm_handler);
-    gpio_acknowledge_irq(vfg_gpio, mask);
-    gpio_set_irq_enabled(vfg_gpio, GPIO_IRQ_EDGE_RISE, true);
-    irq_set_enabled(IO_IRQ_BANK0, true);
-}
-// int read_fan_rpm()
