@@ -79,9 +79,19 @@ struct timerInterval
 };
 
 struct timerInterval *timer_interval_head = NULL;
+
+enum servoPosition
+{
+    HOLD,
+    SWEEP_UP,
+    SWEEP_DOWN
+};
+
+enum servoPosition current_servo_position = HOLD;
 bool head_memory_allocated_4_timer = false;
 enum SystemTimerState firstTimerState;
 int timer_interval_index = 0;
+int virtual_servo_angle = 0;
 
 struct nv_recovery_t
 {
@@ -114,6 +124,7 @@ void setTimeIntervals();
 void destroyList();
 void printConfiguredIntervals();
 void init_read_rpm_pwm();
+void run_continuous_servo_sweep();
 uint16_t get_raw_pwm_counter_value();
 extern struct timerInterval *findTimeEntryType();
 ;
@@ -176,6 +187,7 @@ int main()
     start_synchronized_adc_dma();
     for (;;)
     {
+        // run_continuous_servo_sweep();
         key_event = key_pop();
         if (key_event != 0 && (absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 2000000)) // 50ms && absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 50000
         {

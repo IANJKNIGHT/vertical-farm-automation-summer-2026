@@ -14,13 +14,11 @@
 #define ALARM1_IRQ timer_hardware_alarm_get_irq_num(timer_hw, ALARM1_NUM)
 
 extern char key_char;
-static int num_edges = 0;
-static uint64_t rpm_1_rising_edge;
-static uint64_t rpm_4_rising_edge;
 extern uint64_t measured_rpm;
 int buttonA_col_gpio = 4;
 int vfg_gpio = 31;
-static int vfg_pwm_freq_alarm_num = -1;
+absolute_time_t last_key_press_time;
+
 enum SystemTimerState
 {
     MODE_DEFAULT,
