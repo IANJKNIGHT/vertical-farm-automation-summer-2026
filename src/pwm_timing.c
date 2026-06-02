@@ -93,6 +93,36 @@ void init_read_rpm_pwm() {
     // pwm_set_enabled(pwm_slice_num, true);
 }
 
+void init_pwm_measure_pin(uint gpio_input) {
+    gpio_init(gpio_input);
+    gpio_set_function(gpio_input, GPIO_FUNC_PWM);
+    
+    uint slice_num = pwm_gpio_to_slice_num(gpio_input);
+    
+    // Configure slice to look at high pulse duration
+    pwm_config config = pwm_get_default_config();
+    // PWM_CHAN_B can be configured to count cycles while the input is high
+    pwm_config_set_clkdiv_mode(&config, PWM_DIV_B_HIGH);
+    // Set a high wrap value so the counter doesn't overflow during a 20ms window
+    pwm_config_set_wrap(&config, 0xffff); 
+    
+    pwm_init(slice_num, &config, true);
+}
+
+uint32_t get_pulse_width_ticks(uint gpio_input) {
+    uint slice_num = pwm_gpio_to_slice_num(gpio_input);
+    
+    // Reset the counter register to 0
+    pwm_set_counter(slice_num, 0);
+    
+    // Sleep or wait slightly longer than one full servo frame period (20ms) 
+    // to capture at least one full pulse window cleanly
+    sleep_ms(25);
+    
+    // Read how many system clock ticks occurred while the pin was high
+    return pwm_get_counter(slice_num);
+}
+
 uint16_t get_raw_pwm_counter_value() {
     return pwm_get_counter(pwm_slice_num);
 }

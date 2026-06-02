@@ -12,39 +12,29 @@ int servo_runtime_seconds = 0;
 extern int servo_duty_cycle;
 bool moving_up = true;
 extern absolute_time_t last_key_press_time;
-int gpio_servo_control = 39; // GPIO pin connected to the servo control line
+int gpio_servo_control = 29; // GPIO pin connected to the servo control line
 
-void set_servo_pwm_speed(int speed_percent) {
-
-
-    uint slice_servo_num = pwm_gpio_to_slice_num(gpio_servo_control); // Assuming Pin 39 is connected to the servo control line
-    // Map speed_percent (-100 to 100) to a PWM duty cycle (e.g., 1ms to 2ms pulse width for a 20ms period)
-    // Assuming a 50Hz PWM frequency (20ms period), and a pulse width range of 1ms (5% duty) to 2ms (10% duty)
-
+void setup_clean_test_pwm() {
+    uint gpio_out = 33;
     
-    pwm_hw->slice[slice_servo_num].div = (125*1000000)/50; // Set a high divider to get a low frequency of 50Hz (assuming 125 MHz clock)
-    // Set the PWM duty cycle for the servo control pin
-    pwm_set_chan_level(slice_servo_num, pwm_gpio_to_channel(gpio_servo_control), ((servo_duty_cycle/100) * pwm_hw->slice[slice_servo_num].top) / 100);
-}
+    // 1. Tell the RP2040 that Pin 29 is controlled by the PWM hardware
+    gpio_set_function(gpio_out, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(gpio_out);
+    uint channel = pwm_gpio_to_channel(gpio_out);
 
-void init_servo_position() {
-    // Check our sweep timer flag
-    gpio_set_function(gpio_servo_control, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(gpio_servo_control);
+    // 2. Get a default configuration struct
+    pwm_config config = pwm_get_default_config();
 
-    // 2. Set the frequency (Wrap value)
-    // 125MHz / 12500 = 10kHz PWM frequency
-    // pwm_set_wrap(slice_num, 125000); 
-    
-    // 3. Set initial level (50%)
-    // pwm_set_chan_level(slice_num, pwm_gpio_to_channel(fan_spd_control_gpio), 62500);
+    // 3. Set Frequency to 1 kHz:
+    // System Clock (125 MHz) / Clock Divisor (125) = 1 MHz tick rate.
+    // With a 1 MHz tick rate, wrapping at 999 ticks gives a 1,000 tick period (1 kHz frequency).
+    // pwm_config_set_clkdiv(&config, 125.0f); 
+    // pwm_config_set_wrap(&config, 999);
 
-    // 4. Setup Interrupts
-    pwm_clear_irq(slice_num);
-    pwm_set_irq0_enabled(slice_num, true);
-    irq_set_exclusive_handler(PWM_IRQ_WRAP_0, set_servo_pwm_speed);
-    irq_set_enabled(PWM_IRQ_WRAP_0, true);
+    // 4. Load the configuration and enable the PWM slice
+    pwm_init(slice_num, &config, true);
 
-    // 5. Start the clock
-    pwm_set_enabled(slice_num, true);
+    // 5. Set Duty Cycle to 50%:
+    // 50% of our 1000-tick period (0 to 999) is exactly 500 ticks.
+    pwm_set_chan_level(slice_num, channel, 500);
 }

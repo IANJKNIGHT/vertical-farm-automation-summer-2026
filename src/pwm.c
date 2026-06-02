@@ -12,47 +12,58 @@
 extern uint16_t adc_fan_speed_control[NUM_SAMPLES];
 extern int current_buffer;
 extern int duty_cycle;
-int fan_spd_control_gpio = 25;
+
+extern int servo_duty_cycle;
+extern int fan_spd_control_gpio;
+extern int servo_pwm_gpio_pin;
+// GPIO pin for reading servo PWM signal
 int get_max_adc_value(uint16_t *adc_result);
 int get_min_adc_value(uint16_t *adc_result);
 
 
-void pwm_control()
-{
-    uint slice_GP35_num = pwm_gpio_to_slice_num(fan_spd_control_gpio);
-
-    // Clear the interrupt status register flag
-    pwm_hw->intr = 1u << slice_GP35_num;
-
-    int current_period = pwm_hw->slice[slice_GP35_num].top;
-    // if (current_period == 0) current_period = 125000;
-
-    // CRITICAL FIX: Pass pwm_gpio_to_channel(35) instead of 0 to target Channel A!
-    pwm_hw->slice[slice_GP35_num].div = 125000; // 1 kHz PWM frequency with 1250 divider (assuming 125 MHz clock)
-    pwm_set_chan_level(slice_GP35_num, pwm_gpio_to_channel(fan_spd_control_gpio), duty_cycle * current_period / 100);
-}
-
-void init_pwm_irq() {
-    // 1. Setup the physical pin
+void init_all_system_pwms() {
+    // Target 1: Fan Speed Control on GPIO 25 (Slice 4, Chan B)
     gpio_set_function(fan_spd_control_gpio, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(fan_spd_control_gpio);
-
-    // 2. Set the frequency (Wrap value)
-    // 125MHz / 12500 = 10kHz PWM frequency
-    pwm_set_wrap(slice_num, 125000); 
+    uint fan_slice = pwm_gpio_to_slice_num(fan_spd_control_gpio);
     
-    // 3. Set initial level (50%)
-    // pwm_set_chan_level(slice_num, pwm_gpio_to_channel(fan_spd_control_gpio), 62500);
+    // Target 2: Servo Control on GPIO 29 (Slice 6, Chan B)
+    gpio_set_function(servo_pwm_gpio_pin, GPIO_FUNC_PWM);
+    uint servo_slice = pwm_gpio_to_slice_num(servo_pwm_gpio_pin);
 
-    // 4. Setup Interrupts
-    pwm_clear_irq(slice_num);
-    pwm_set_irq0_enabled(slice_num, true);
-    irq_set_exclusive_handler(PWM_IRQ_WRAP_0, pwm_control);
-    irq_set_enabled(PWM_IRQ_WRAP_0, true);
+    // ---- CONFIGURE FAN (1 kHz Base Frequency) ----
+    pwm_config fan_config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&fan_config, 125.0f); // 1 MHz tick rate
+    pwm_config_set_wrap(&fan_config, 999);      // 1000 tick period = 1 kHz
+    pwm_init(fan_slice, &fan_config, true);
 
-    // 5. Start the clock
-    pwm_set_enabled(slice_num, true);
+    // ---- CONFIGURE SERVO (50 Hz Base Frequency) ----
+    pwm_config servo_config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&servo_config, 125.0f); // 1 MHz tick rate
+    pwm_config_set_wrap(&servo_config, 19999);    // 20,000 tick period = 50 Hz
+    pwm_init(servo_slice, &servo_config, true);
 }
+
+// void init_pwm_irq() {
+//     // 1. Setup the physical pin
+//     gpio_set_function(fan_spd_control_gpio, GPIO_FUNC_PWM);
+//     uint slice_num = pwm_gpio_to_slice_num(fan_spd_control_gpio);
+
+//     // 2. Set the frequency (Wrap value)
+//     // 125MHz / 12500 = 10kHz PWM frequency
+//     pwm_set_wrap(slice_num, 125000); 
+    
+//     // 3. Set initial level (50%)
+//     // pwm_set_chan_level(slice_num, pwm_gpio_to_channel(fan_spd_control_gpio), 62500);
+
+//     // 4. Setup Interrupts
+//     pwm_clear_irq(slice_num);
+//     pwm_set_irq0_enabled(slice_num, true);
+//     irq_set_exclusive_handler(PWM_IRQ_WRAP_0, pwm_control);
+//     irq_set_enabled(PWM_IRQ_WRAP_0, true);
+
+//     // 5. Start the clock
+//     pwm_set_enabled(slice_num, true);
+// }
 
 void measure_duty_cycle_period(uint16_t *adc_result, int *duty_period)
 {

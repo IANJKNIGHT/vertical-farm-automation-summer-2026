@@ -8,15 +8,19 @@
 #include "hardware/dma.h"
 #include "queue.h"
 #include "cmsis_gcc.h"
+#include "hardware/pwm.h"
 
 //////////////////////////////////////////////////////////////////////////////
 
 #define NUM_SAMPLES 1000
 #define MASTER_BUFFER_SIZE (NUM_SAMPLES * 2) // 2000 elements total
 #define SPEED_SET_TIME 30                    // seconds
-#define PWM_SAMPLING_4_Vfg 20               // ms
+#define PWM_SAMPLING_4_Vfg 20                // ms
+#define SERVO_PERIOD_MS 20                      // Standard servo PWM period is 20ms (50Hz)
 #define MAX_FAN_RPM 15600
 #define TELEMETRY_PRINT_INTERVAL_MS 200 // Change this to 500 or 1000 if you want it slower!
+#define HOLD_STILL_TIME_MS 2000
+#define MOVE_4_5_DEGS_MS 100 // ms
 
 // Double-sized master ping-pong buffers
 uint16_t master_buffer1[MASTER_BUFFER_SIZE];
@@ -37,10 +41,15 @@ int key_event_count = 0;
 char last_num_entered = '\0';
 bool first_num_set = false;
 bool linked_list_set = false;
+int servo_middle_position_pulse_ms_times_100 = 150; // 1.5ms pulse width for 90 degrees
+int servo_180_position_pulse_ms_times_100 = 200;    // 2ms pulse width for 180 degrees
+int servo_0_position_pulse_ms_times_100 = 100;      // 1ms pulse width for 0 degrees
 
 volatile uint16_t *completed_raw_buffer;
 absolute_time_t mode_switch_time_remaining_to_set;
 
+int fan_spd_control_gpio = 25;
+int servo_pwm_gpio_pin = 29; 
 int remaining_days = 0;
 int remaining_hours = 0;
 int remaining_minutes = 0;
@@ -87,12 +96,12 @@ struct timerInterval *timer_interval_head = NULL;
 
 enum servoPosition
 {
-    HOLD,
-    SWEEP_UP,
-    SWEEP_DOWN
+    HOLD_90,
+    ROTATE_180,
+    ROTATE_0
 };
-
-enum servoPosition current_servo_position = HOLD;
+enum servoPosition current_servo_position = HOLD_90;
+enum servoPosition servo_transition_state = ROTATE_0;
 
 typedef struct
 {
@@ -124,7 +133,7 @@ void measure_duty_cycle_period(uint16_t *adc_result, int *duty_period);
 void init_adc_combined_freerun();
 void init_state_machine_led();
 void init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
-void init_pwm_irq();
+// void init_pwm_irq();
 void keypad_init_pins();
 void keypad_init_timer();
 void start_new_blink_sequence();
@@ -135,16 +144,24 @@ void save_state_1_logic(char stable_key);
 void secondPressLogic(char stable_key);
 void update_ui_leds_from_main(char stable_key);
 void save_state_2_logic();
+void init_all_system_pwms();
 void debug_enter_state();
 void debug_system_timer_state();
 void print_pid_dashboard(int target, int current, pid_instance *pid);
 void setTimeIntervals();
+// void pwm_control_servo();
 void destroyList();
 void printConfiguredIntervals();
+// void init_servo_position();
 void init_read_rpm_pwm();
+// void init_pwm_measure_pin(uint gpio_input);
+void setup_clean_test_pwm();
+uint32_t get_pulse_width_ticks(uint gpio_input);
 void run_continuous_servo_sweep();
-int servo_duty_cycle =1500; // Global variable to hold the current servo duty cycle, accessible across files
-int target_rpm = 1000; // Example target RPM for the fan
+// void init_servo_pwm_irq();
+void set_servo_pwm_speed();
+int servo_pulse_width_ms_times_100 = 150; // Global variable to hold the current servo duty cycle, accessible across files
+int target_rpm = 1000;        // Example target RPM for the fan
 uint16_t get_raw_pwm_counter_value();
 extern struct timerInterval *findTimeEntryType();
 struct nv_recovery_t
@@ -202,18 +219,25 @@ int main()
     keypad_init_timer();
     init_state_machine_led();
     init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
-    init_pwm_irq();
     init_read_rpm_pwm();
+    init_all_system_pwms();
 
     // 3. Claim the master DMA channel from the system pool
     dma_master_chan = dma_claim_unused_channel(true);
 
     absolute_time_t next_rpm_sample_time;
+    absolute_time_t timer_hold_plus_90 = make_timeout_time_ms(HOLD_STILL_TIME_MS); // Start the first timer for the initial HOLD_90 position
+    absolute_time_t timer_rotate_180;
+    bool rotating_up = true;
+    absolute_time_t timer_hold_minus_90;
+    absolute_time_t timer_rotate_0;
     uint16_t last_edge_count = 0;
+    int servo_pwm_counter = 0;
 
     int cached_rpm = 0;
     next_rpm_sample_time = make_timeout_time_ms(PWM_SAMPLING_4_Vfg);
     absolute_time_t next_telemetry_print_time = make_timeout_time_ms(TELEMETRY_PRINT_INTERVAL_MS);
+
     static pid_instance mota_pid = {.Kd = 0.000,
                                     .integral_error = 0,
                                     .Ki = 0.05,
@@ -228,6 +252,7 @@ int main()
     absolute_time_t next_flash_save_time = make_timeout_time_ms(30000);
     // This starts the DMA channel first, then releases the ADC clock loop
     start_synchronized_adc_dma();
+    setup_clean_test_pwm();
     for (;;)
     {
         // run_continuous_servo_sweep();
@@ -282,17 +307,17 @@ int main()
             if (time_reached(next_telemetry_print_time))
             {
                 next_telemetry_print_time = make_timeout_time_ms(TELEMETRY_PRINT_INTERVAL_MS);
-                
+                // printf("Num edges: %d | Sampling Rate: 100ms\n", delta_edges);
                 // This now prints elegantly at your throttled rate (e.g., 200ms)
-                print_pid_dashboard(target_rpm, cached_rpm, &mota_pid);
+                // print_pid_dashboard(target_rpm, cached_rpm, &mota_pid);
             }
         }
         if (time_reached(next_telemetry_print_time))
         {
-            next_telemetry_print_time = make_timeout_time_ms();
-            
+            next_telemetry_print_time = make_timeout_time_ms(TELEMETRY_PRINT_INTERVAL_MS);
+
             // This now prints elegantly at your throttled rate (e.g., 200ms)
-            print_pid_dashboard(target_rpm, cached_rpm, &mota_pid);
+            // print_pid_dashboard(target_rpm, cached_rpm, &mota_pid);
         }
 
         if (master_buffer_ready)
@@ -311,7 +336,7 @@ int main()
                 if (system_timer_state == MODE_MANUAL_ADJUST)
                 {
                     duty_cycle = adc_fan_speed_control[0] * 100 / 4095;
-                    measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
+                    // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
 
                     // Print the cached value instantly with ZERO cycle delays!
                     // printf("Duty Cycle: %d | Measured RPM: %d\n", duty_cycle, cached_rpm);
@@ -319,48 +344,78 @@ int main()
                 // ... rest of state assignment paths ...
             }
         }
-
-        // switch (system_timer_state)
+        // set_servo_pwm_speed();
+        // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
+        // printf("Servo Duty Cycle: %d\n", duty_period[0]);
+        
+        // switch (current_servo_position)
         // {
-        // case MODE_DEFAULT:
-        // {
-        //     float error_percent = ((float)(target_rpm - cached_rpm) / MAX_FAN_RPM) * 100.0f;
-        //     apply_pid(&mota_pid, error_percent);
-
-        //     // Now mota_pid.output is naturally in "Percent Duty Cycle" units
-        //     int final_pwm = (int)mota_pid.output;
-
-        //     // Clamp it between safe hardware limits
-        //     if (final_pwm > 100)
-        //         final_pwm = 100;
-        //     if (final_pwm < 0)
-        //         final_pwm = 0;
-
-        //     duty_cycle = final_pwm;
-        //     // duty_cycle = 50;
-        //     if (key_char == 'A')
+        //     case HOLD_90:
         //     {
-        //         system_timer_state = MODE_MANUAL_ADJUST;
-        //         mode_switch_time_remaining_to_set = get_absolute_time();
+        //         if (servo_transition_state == ROTATE_0 && time_reached(timer_hold_plus_90))
+        //         {
+        //             current_servo_position = ROTATE_180;
+        //             timer_rotate_180 = make_timeout_time_ms(MOVE_4_5_DEGS_MS);
+        //             servo_transition_state = HOLD_90;
+        //         }
+        //         else if (servo_transition_state == ROTATE_180 && time_reached(timer_hold_minus_90))
+        //         {
+        //             current_servo_position = ROTATE_0;
+        //             timer_rotate_0 = make_timeout_time_ms(MOVE_4_5_DEGS_MS);
+        //         }
+        //         break;
         //     }
-        //     else if (key_char == 'C')
+        //     case ROTATE_180:
         //     {
-        //         system_timer_state = MODE_PID_TUNING;
+        //         if (servo_transition_state == HOLD_90 && time_reached(timer_rotate_180))
+        //         {
+        //             servo_pulse_width_ms_times_100 = rotating_up ? servo_pulse_width_ms_times_100 + 5 : servo_pulse_width_ms_times_100 - 5;
+        //             if (servo_pulse_width_ms_times_100 >= servo_180_position_pulse_ms_times_100)
+        //             {
+        //                 servo_pulse_width_ms_times_100 = servo_180_position_pulse_ms_times_100;
+        //                 rotating_up = false;
+        //             }
+        //             timer_rotate_180 = make_timeout_time_ms(MOVE_4_5_DEGS_MS);
+        //             current_servo_position = servo_pulse_width_ms_times_100 == servo_middle_position_pulse_ms_times_100 ? HOLD_90 : ROTATE_180;
+        //             servo_transition_state = ROTATE_180;
+        //         }
+        //         break;
         //     }
-        //     break;
+        //     case ROTATE_0:
+        //     {
+        //         if (servo_transition_state == HOLD_90 && time_reached(timer_rotate_0))
+        //         {
+        //             servo_pulse_width_ms_times_100 = rotating_up ? servo_pulse_width_ms_times_100 + 5 : servo_pulse_width_ms_times_100 - 5;
+        //             if (servo_pulse_width_ms_times_100 <= servo_0_position_pulse_ms_times_100)
+        //             {
+        //                 servo_pulse_width_ms_times_100 = servo_0_position_pulse_ms_times_100;
+        //                 rotating_up = true;
+        //             }
+        //             timer_rotate_0 = make_timeout_time_ms(MOVE_4_5_DEGS_MS);
+        //             current_servo_position = servo_pulse_width_ms_times_100 == servo_middle_position_pulse_ms_times_100 ? HOLD_90 : ROTATE_0;
+        //             servo_transition_state = ROTATE_0;
+        //         }
+        //         break;
+        //     }
         // }
-        // If target is 4680 and current is 4000, error is ~14.5%
+        // pwm_set_gpio_level(servo_pwm_gpio_pin, (float) servo_pulse_width_ms_times_100 / (SERVO_PERIOD_MS * 100)); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
+        
+            pwm_set_gpio_level(servo_pwm_gpio_pin, ); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
+        // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
 
         switch (system_timer_state)
         {
         case MODE_DEFAULT:
         {
-            if (target_rpm < 7000) {
+            if (target_rpm < 7000)
+            {
                 // Ultra-stable parameters for your primary low-speed operations
                 mota_pid.Kp = 0.04f;
                 mota_pid.Ki = 0.05f;
                 mota_pid.integral_max = 150;
-            } else {
+            }
+            else
+            {
                 // Aggressive parameters to push past the high-speed aerodynamic wall
                 mota_pid.Kp = 0.08f;
                 mota_pid.Ki = 0.20f;
@@ -374,14 +429,15 @@ int main()
             // Clamp it between safe hardware limits
             if (final_pwm > 100)
                 final_pwm = 100;
-            if ( final_pwm < 10)
+            if (final_pwm < 10)
                 final_pwm = 10;
             // if (target_rpm >= .18 * MAX_FAN_RPM && final_pwm < 0)
             //     final_pwm = 0;
 
             duty_cycle = final_pwm;
+            pwm_set_gpio_level(fan_spd_control_gpio, duty_cycle); // Scale duty cycle to ADC range for testing
             // duty_cycle = 50; // Comment this out to enable PID control and test your tuning changes in real-time!
-            measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
+            // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
             // printf("Duty Cycle: %d | Measured RPM: %d\n", duty_period[0], cached_rpm);
 
             if (key_char == 'A')
@@ -401,7 +457,7 @@ int main()
         {
             // Sync both variables so your hardware and diagnostic metrics align
             duty_cycle = adc_fan_speed_control[0] * 100 / 4095;
-            set_duty = duty_cycle;
+            pwm_set_gpio_level(fan_spd_control_gpio, duty_cycle); 
 
             if (key_char == '#')
             {
