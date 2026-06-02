@@ -97,6 +97,7 @@ int main()
     start_synchronized_adc_dma();
     for (;;)
     {
+        duty_cycle = 50;
         // uint16_t key_event = key_pop();
         // if (key_event != 0)
         // {

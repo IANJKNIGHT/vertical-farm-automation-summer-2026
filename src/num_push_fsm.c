@@ -17,6 +17,7 @@ extern absolute_time_t mode_switch_time_remaining_to_set;
 enum SystemTimerState
 {
     MODE_DEFAULT,
+    MODE_PID_TUNING,
     MODE_MANUAL_ADJUST,
     SEL_TIME_VALS,
     ENTER_DAYS,

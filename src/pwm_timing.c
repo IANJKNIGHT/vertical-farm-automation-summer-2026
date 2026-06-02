@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <string.h>
-#include "pico/stdlib.h"
 #include "hardware/timer.h"
 #include "hardware/irq.h"
 #include "hardware/adc.h"
@@ -22,7 +21,9 @@ absolute_time_t last_key_press_time;
 enum SystemTimerState
 {
     MODE_DEFAULT,
+    MODE_PID_TUNING,
     MODE_MANUAL_ADJUST,
+    SEL_TIME_VALS,
     ENTER_DAYS,
     ENTER_HOURS,
     ENTER_MINUTES,
