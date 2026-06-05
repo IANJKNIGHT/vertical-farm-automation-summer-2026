@@ -26,9 +26,9 @@ void setup_clean_test_pwm() {
     pwm_config config = pwm_get_default_config();
 
     // 3. Set Frequency to 1 kHz:
-    // System Clock (125 MHz) / Clock Divisor (125) = 1 MHz tick rate.
+    // System Clock (150 MHz) / Clock Divisor (150.0f) = 1 MHz tick rate.
     // With a 1 MHz tick rate, wrapping at 999 ticks gives a 1,000 tick period (1 kHz frequency).
-    // pwm_config_set_clkdiv(&config, 125.0f); 
+    // pwm_config_set_clkdiv(&config, 150.0f); 
     // pwm_config_set_wrap(&config, 999);
 
     // 4. Load the configuration and enable the PWM slice

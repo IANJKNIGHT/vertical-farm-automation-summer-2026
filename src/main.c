@@ -400,7 +400,7 @@ int main()
         // }
         // pwm_set_gpio_level(servo_pwm_gpio_pin, (float) servo_pulse_width_ms_times_100 / (SERVO_PERIOD_MS * 100)); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
         
-            pwm_set_gpio_level(servo_pwm_gpio_pin, ); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
+        pwm_set_gpio_level(servo_pwm_gpio_pin, 10); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
         // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
 
         switch (system_timer_state)

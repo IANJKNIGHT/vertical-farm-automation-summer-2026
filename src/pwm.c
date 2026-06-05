@@ -32,13 +32,13 @@ void init_all_system_pwms() {
 
     // ---- CONFIGURE FAN (1 kHz Base Frequency) ----
     pwm_config fan_config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&fan_config, 125.0f); // 1 MHz tick rate
+    pwm_config_set_clkdiv(&fan_config, 150.0f); // 1 MHz tick rate
     pwm_config_set_wrap(&fan_config, 999);      // 1000 tick period = 1 kHz
     pwm_init(fan_slice, &fan_config, true);
 
     // ---- CONFIGURE SERVO (50 Hz Base Frequency) ----
     pwm_config servo_config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&servo_config, 125.0f); // 1 MHz tick rate
+    pwm_config_set_clkdiv(&servo_config, 150.0f); // 1 MHz tick rate
     pwm_config_set_wrap(&servo_config, 19999);    // 20,000 tick period = 50 Hz
     pwm_init(servo_slice, &servo_config, true);
 }
