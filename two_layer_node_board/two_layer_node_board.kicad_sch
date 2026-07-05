@@ -2462,6 +2462,156 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Jumper:Jumper_2_Open"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "JP"
+				(at 0 2.794 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Jumper_2_Open"
+				(at 0 -2.286 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Jumper, 2-pole, open"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "Jumper SPST"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "Jumper* TestPoint*2Pads* TestPoint*Bridge*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "Jumper_2_Open_0_0"
+				(circle
+					(center -2.032 0)
+					(radius 0.508)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 2.032 0)
+					(radius 0.508)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "Jumper_2_Open_0_1"
+				(arc
+					(start -1.524 1.27)
+					(mid 0 1.778)
+					(end 1.524 1.27)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "Jumper_2_Open_1_1"
+				(pin passive line
+					(at -5.08 0 0)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 0 180)
+					(length 2.54)
+					(name "B"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "MCU_RaspberryPi:RP2040"
 			(exclude_from_sim no)
 			(in_bom yes)
@@ -4821,7 +4971,7 @@
 	)
 	(rectangle
 		(start 14.605 16.51)
-		(end 95.25 46.99)
+		(end 95.25 61.595)
 		(stroke
 			(width 0)
 			(type default)
@@ -5863,6 +6013,16 @@
 	)
 	(wire
 		(pts
+			(xy 54.61 48.26) (xy 46.99 48.26)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "271c073d-f480-4952-a5c4-5030063ce266")
+	)
+	(wire
+		(pts
 			(xy 35.56 87.63) (xy 43.18 87.63)
 		)
 		(stroke
@@ -5890,16 +6050,6 @@
 			(type default)
 		)
 		(uuid "2c46ab8e-53bb-4b19-98b4-cb9ce0c377f9")
-	)
-	(wire
-		(pts
-			(xy 133.35 134.62) (xy 132.08 134.62)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2c9f3766-cf08-4db1-a705-26004049ea26")
 	)
 	(wire
 		(pts
@@ -6453,7 +6603,7 @@
 	)
 	(wire
 		(pts
-			(xy 81.28 39.37) (xy 85.09 39.37)
+			(xy 81.28 43.18) (xy 85.09 43.18)
 		)
 		(stroke
 			(width 0)
@@ -6693,7 +6843,7 @@
 	)
 	(wire
 		(pts
-			(xy 73.66 39.37) (xy 71.12 39.37)
+			(xy 73.66 43.18) (xy 71.12 43.18)
 		)
 		(stroke
 			(width 0)
@@ -6953,7 +7103,7 @@
 	)
 	(wire
 		(pts
-			(xy 71.12 30.48) (xy 71.12 39.37)
+			(xy 71.12 30.48) (xy 71.12 43.18)
 		)
 		(stroke
 			(width 0)
@@ -7063,6 +7213,16 @@
 	)
 	(wire
 		(pts
+			(xy 54.61 55.88) (xy 54.61 48.26)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "cad773c1-4ff2-4e3b-b630-1d31f7d9caff")
+	)
+	(wire
+		(pts
 			(xy 113.03 175.26) (xy 113.03 177.8)
 		)
 		(stroke
@@ -7080,6 +7240,16 @@
 			(type default)
 		)
 		(uuid "ce674b8f-bb56-44ba-a8e6-cb13d563a6ff")
+	)
+	(wire
+		(pts
+			(xy 38.1 55.88) (xy 39.37 55.88)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d08322db-72e4-4937-a63d-6d99bc9d2772")
 	)
 	(wire
 		(pts
@@ -7140,16 +7310,6 @@
 			(type default)
 		)
 		(uuid "d4530d94-dac1-4e48-b711-554c5569f960")
-	)
-	(wire
-		(pts
-			(xy 132.08 125.73) (xy 128.27 125.73)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d527e6de-267e-4d68-b452-5588002237d9")
 	)
 	(wire
 		(pts
@@ -7243,13 +7403,13 @@
 	)
 	(wire
 		(pts
-			(xy 132.08 125.73) (xy 132.08 127)
+			(xy 49.53 55.88) (xy 54.61 55.88)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "e8e6e0fb-bf8f-41bb-af1d-f96b8987371b")
+		(uuid "ea61f1b4-f167-406d-bd8d-d697f6ca19a6")
 	)
 	(wire
 		(pts
@@ -7765,7 +7925,7 @@
 	)
 	(global_label "RS485_B"
 		(shape input)
-		(at 133.35 134.62 0)
+		(at 128.27 125.73 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7775,7 +7935,7 @@
 		)
 		(uuid "281c3b3d-fb62-4d62-a02b-1d4624b37348")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 144.6808 134.62 0)
+			(at 139.6008 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7886,6 +8046,28 @@
 		(uuid "402a55e4-10fd-4c5a-a135-a305cf57d8a7")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 241.3 59.0634 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "+3V3_MCU"
+		(shape input)
+		(at 269.24 97.79 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "4306745b-2324-4f82-b859-2004adb59413")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 282.3247 97.79 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8401,6 +8583,28 @@
 			)
 		)
 	)
+	(global_label "RS485_A"
+		(shape input)
+		(at 39.37 48.26 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "b8c90d5b-ea80-4c89-a2e0-54b562907286")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 28.2206 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "DHT11_DATA1"
 		(shape input)
 		(at 218.44 120.65 270)
@@ -8414,6 +8618,28 @@
 		(uuid "bb6baff9-6f66-4cf2-b5f2-caf4c999e800")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 218.44 136.2142 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "RS485_B"
+		(shape input)
+		(at 38.1 55.88 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bbda785d-142d-4546-a23a-0c1ce578c893")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 26.7692 55.88 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10808,7 +11034,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 85.09 39.37 0)
+		(at 85.09 43.18 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10817,7 +11043,7 @@
 		(fields_autoplaced yes)
 		(uuid "3e8f1dab-9df7-4d07-9eed-3edf7bdb8df8")
 		(property "Reference" "#PWR04"
-			(at 85.09 45.72 0)
+			(at 91.44 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10826,15 +11052,16 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 85.09 44.45 0)
+			(at 88.9 43.1799 90)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify right)
 			)
 		)
 		(property "Footprint" ""
-			(at 85.09 39.37 0)
+			(at 85.09 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10843,7 +11070,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 85.09 39.37 0)
+			(at 85.09 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10852,7 +11079,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 85.09 39.37 0)
+			(at 85.09 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11553,6 +11780,74 @@
 			(project "two_layer_node_board"
 				(path "/84e329f1-6958-41dc-b6f4-accb6c122b77"
 					(reference "C14")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Jumper:Jumper_2_Open")
+		(at 44.45 55.88 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "5ba9be90-49ab-48b9-9ce6-5b209e369f21")
+		(property "Reference" "JP1"
+			(at 44.45 50.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Jumper_2_Open"
+			(at 44.45 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 44.45 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 44.45 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Jumper, 2-pole, open"
+			(at 44.45 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b5772f3f-f05b-4263-bbd2-1de305913799")
+		)
+		(pin "2"
+			(uuid "e716a917-c7c7-40ee-94c3-5852e22efe26")
+		)
+		(instances
+			(project ""
+				(path "/84e329f1-6958-41dc-b6f4-accb6c122b77"
+					(reference "JP1")
 					(unit 1)
 				)
 			)
@@ -13369,76 +13664,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:R")
-		(at 132.08 130.81 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "a2029468-6bc6-4cb2-8be5-a0d0969ddc5b")
-		(property "Reference" "R10"
-			(at 134.62 129.5399 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "120"
-			(at 134.62 132.0799 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" ""
-			(at 130.302 130.81 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 132.08 130.81 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Resistor"
-			(at 132.08 130.81 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "a07a6fd2-32b0-4cf8-9c65-7e3c3aba042c")
-		)
-		(pin "2"
-			(uuid "9d92afc5-faaa-4f88-8809-90f55bc4d74e")
-		)
-		(instances
-			(project ""
-				(path "/84e329f1-6958-41dc-b6f4-accb6c122b77"
-					(reference "R10")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:+3.3V")
 		(at 80.01 166.37 0)
 		(unit 1)
@@ -13913,6 +14138,74 @@
 		)
 	)
 	(symbol
+		(lib_id "Device:R")
+		(at 43.18 48.26 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b30729ef-ce66-476c-acac-f4b59ed27a61")
+		(property "Reference" "R11"
+			(at 43.18 41.91 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "120"
+			(at 43.18 44.45 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 43.18 46.482 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 43.18 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 43.18 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "9b555583-0504-4f5b-bdd5-eaf882661c4f")
+		)
+		(pin "1"
+			(uuid "fc127c3b-8f15-4c14-bc87-add89bfcf279")
+		)
+		(instances
+			(project ""
+				(path "/84e329f1-6958-41dc-b6f4-accb6c122b77"
+					(reference "R11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 113.03 41.91 0)
 		(unit 1)
@@ -14186,7 +14479,7 @@
 	)
 	(symbol
 		(lib_id "Diode:SS35")
-		(at 77.47 39.37 0)
+		(at 77.47 43.18 180)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14195,7 +14488,7 @@
 		(fields_autoplaced yes)
 		(uuid "bdaf4852-d428-4b1e-98dc-c4d68b007c06")
 		(property "Reference" "D2"
-			(at 77.1525 33.02 0)
+			(at 77.7875 36.83 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14203,7 +14496,7 @@
 			)
 		)
 		(property "Value" "SS35"
-			(at 77.1525 35.56 0)
+			(at 77.7875 39.37 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14211,7 +14504,7 @@
 			)
 		)
 		(property "Footprint" "Diode_SMD:D_SMA"
-			(at 77.47 43.815 0)
+			(at 77.47 38.735 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14220,7 +14513,7 @@
 			)
 		)
 		(property "Datasheet" "https://www.vishay.com/docs/88751/ss32.pdf"
-			(at 77.47 39.37 0)
+			(at 77.47 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14229,7 +14522,7 @@
 			)
 		)
 		(property "Description" "50V 3A Schottky Diode, SMA"
-			(at 77.47 39.37 0)
+			(at 77.47 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
