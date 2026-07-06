@@ -1,0 +1,17 @@
+So, in order to view the telemetry, I have to plug in my computer directly to the port? Is the system wireless or will it require USB-C wires?
+Based on your current schematic blocks, the system is completely wired and will require a physical USB-C cable plugged into your laptop to view the telemetry and log the data to your CSV file.
+How do I backlog the data to use it later?
+Path 1: Add a MicroSD Card Slot (Highly Recommended for Research)
+You can add a MicroSD card SPI breakout slot directly onto your Master Board schematic. MicroSD cards use a basic SPI communication interface, which the RP2040 handles beautifully.
+The pins that I see on the MicroSD Card are Dat2, Dat3, CMD, VDD, CLK, VSS, DAT0, DAT1 How do these correspond to CLK, DI, DO, CS? What is the name of the datasheet I can look at to view these?
+
+The Hybrid Recommendation
+Keep the Architecture Simple: Let your master controller handle the real-time node data and run a localized gradient-balancing algorithm.
+
+Use a Simple Time-of-Day Multiplier: If you want "memory" of external factors, you don't need a full ML model yet. You can hardcode simple scheduled logic (e.g., boosting baseline airflow during peak daylight hours) to assist your reactive loops.
+
+Use the SD Logs for Validation: Use this first phase to collect clean, long-term environmental data on the SD cards. If you find down the road that your PID loops cannot stabilize the gradient due to unpredictable environmental shifts, you will already have the exact dataset required to train an ML model for Phase 2.
+
+Could I incorporate temperature and humidity in a separate control loop, and the fan changes its RPM and servo position until the gradient is more stable or is this too reactive?
+https://gemini.google.com/share/5e993806bc51
+What do you mean by "Pair this port with your standard tactile BOOT and RESET buttons." I googled "USB_C_Receptacle_USB2.0_16PerriteBead datasheet" but I couldn't find the datasheet. When you say this "Route the differential output pins A (Pin 6) and B (Pin 7) of your THVD1450D transceiver to a robust 3-pin screw terminal block labeled RS485_OUT." Do you mean attach pins A and B to 1 and 2 of the screw terminal and connect a resistor across them? What is the point of the third pin? 

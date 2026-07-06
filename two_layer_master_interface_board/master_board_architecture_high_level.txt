@@ -1,0 +1,2 @@
+[User Input]          [The Brain]            [The PC Link]      [The Bus]
+Keypad, Pot, OLED  ➡️  RP2040 Microcontroller  ➡️  FT232R Bridge   ➡️  THVD1450 Transceiver

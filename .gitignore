@@ -16,6 +16,29 @@ fp-info-cache
 # --- IDE Specific (VS Code) ---
 .vscode/
 # Keep extensions.json to help teammates get the right plugins
+
+# SolidWorks.gitignore
+
+# gitignore file for a SolidWorks project
+
+# SolidWorks temporary files
+~$*.sldprt
+~$*.sldasm
+~$*.slddrw
+~$*.sld
+
+# For systems with case-sensitive (SolidWorks uses both)
+~$*.SLDPRT
+~$*.SLDASM
+~$*.SLDDRW
+~$*.SLD
+
+# SolidWorks backups and auto-recovery
+*.bak
+*.swbak
+
+# Cache of simulation results
+/simulation_results/
 !.vscode/extensions.json
 
 # --- OS Specific ---

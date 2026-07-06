@@ -39,7 +39,7 @@ void init_all_system_pwms() {
     // ---- CONFIGURE SERVO (50 Hz Base Frequency) ----
     pwm_config servo_config = pwm_get_default_config();
     pwm_config_set_clkdiv(&servo_config, 150.0f); // 1 MHz tick rate
-    pwm_config_set_wrap(&servo_config, 19999);    // 20,000 tick period = 50 Hz
+    pwm_config_set_wrap(&servo_config,  19999);    // 20,000 tick period = 50 Hz
     pwm_init(servo_slice, &servo_config, true);
 }
 
