@@ -1,183 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "pico/stdlib.h"
-#include "hardware/timer.h"
-#include "hardware/irq.h"
-#include "hardware/adc.h"
-#include "hardware/dma.h"
-#include "queue.h"
-#include "cmsis_gcc.h"
-#include "hardware/pwm.h"
-
-//////////////////////////////////////////////////////////////////////////////
-
-#define NUM_SAMPLES 1000
-#define MASTER_BUFFER_SIZE (NUM_SAMPLES * 2) // 2000 elements total
-#define SPEED_SET_TIME 30                    // seconds
-#define PWM_SAMPLING_4_Vfg 20                // ms
-#define SERVO_PERIOD_MS 20                      // Standard servo PWM period is 20ms (50Hz)
-#define MAX_FAN_RPM 15600
-#define TELEMETRY_PRINT_INTERVAL_MS 200 // Change this to 500 or 1000 if you want it slower!
-#define HOLD_STILL_TIME_MS 2000
-#define MOVE_4_5_DEGS_MS 100 // ms
-
-// Double-sized master ping-pong buffers
-uint16_t master_buffer1[MASTER_BUFFER_SIZE];
-uint16_t master_buffer2[MASTER_BUFFER_SIZE];
-
-uint16_t adc_fan_speed_control[NUM_SAMPLES];
-uint16_t adc_duty_cycle_result[NUM_SAMPLES];
-int second_press_blink_count = 0;
-
-int dma_master_chan;
-int duty_cycle = 50; // Default to 50% duty cycle until we read the ADC
-int set_duty = 0;
-int current_buffer = 1;
-char key_char = '\0';
-uint16_t num_entered = '\0';
-uint16_t key_event = 0;
-int key_event_count = 0;
-char last_num_entered = '\0';
-bool first_num_set = false;
-bool linked_list_set = false;
-int servo_middle_position_pulse_ms_times_100 = 150; // 1.5ms pulse width for 90 degrees
-int servo_180_position_pulse_ms_times_100 = 200;    // 2ms pulse width for 180 degrees
-int servo_0_position_pulse_ms_times_100 = 100;      // 1ms pulse width for 0 degrees
-
-volatile uint16_t *completed_raw_buffer;
-absolute_time_t mode_switch_time_remaining_to_set;
-
-int fan_spd_control_gpio = 25;
-int servo_pwm_gpio_pin = 29; 
-int remaining_days = 0;
-int remaining_hours = 0;
-int remaining_minutes = 0;
-int remaining_seconds_seconds = 0;
-bool time_val_for_fan_displayed = false;
-bool entry_too_large_error = false; // when the entered time is greater than 23 hours or 59 min/seconds
-absolute_time_t mode_switch_time_remaining_to_set;
-bool time_interval_head_set = false;
-
-volatile bool master_buffer_ready = false; // Flag to indicate a master buffer is full and ready for processing
-enum SystemTimerState
-{
-    MODE_DEFAULT,
-    MODE_PID_TUNING,
-    SWEEP_SERVO,
-    MODE_MANUAL_ADJUST,
-    SEL_TIME_VALS,
-    ENTER_DAYS,
-    ENTER_HOURS,
-    ENTER_MINUTES,
-    ENTER_SECONDS,
-    MODE_TIMED_RUN
-};
-enum SystemTimerState system_timer_state = MODE_DEFAULT;
-
-enum EnterState
-{
-    NO_ENTRY,
-    FIRST_PRESS,
-    SAVE_STATE_1,
-    SECOND_PRESS,
-    SAVE_STATE_2,
-    TOO_BIG
-};
-enum EnterState enter_state = NO_ENTRY;
-struct timerInterval
-{
-    enum SystemTimerState timer_state;
-    struct timerInterval *next;
-    struct timerInterval *prev;
-};
-
-struct timerInterval *timer_interval_head = NULL;
-
-enum servoPosition
-{
-    HOLD_90,
-    ROTATE_180,
-    ROTATE_0
-};
-enum servoPosition current_servo_position = HOLD_90;
-enum servoPosition servo_transition_state = ROTATE_0;
-
-typedef struct
-{
-    float Kp;
-    float Ki;
-    float Kd;
-    float prev_error;
-    float integral_error;
-    float output;       /* output of the PID */
-    float sam_rate;     /* sampling rate */
-    float integral_max; /* Maximum of the error integral */
-    float pid_max;      /* Maximum of the PID */
-} pid_instance;
-
-enum pid_typedef
-{
-    pid_ok,
-    pid_numerical
-};
-
-enum pid_typedef apply_pid(pid_instance *pid, float input_error);
-
-bool head_memory_allocated_4_timer = false;
-enum SystemTimerState firstTimerState;
-int timer_interval_index = 0;
-int virtual_servo_angle = 0;
-
-void measure_duty_cycle_period(uint16_t *adc_result, int *duty_period);
-void init_adc_combined_freerun();
-void init_state_machine_led();
-void init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
-// void init_pwm_irq();
-void keypad_init_pins();
-void keypad_init_timer();
-void start_new_blink_sequence();
-void start_synchronized_adc_dma();
-void noEntryLogic(char stable_key);
-void firstPressLogic(char stable_key);
-void save_state_1_logic(char stable_key);
-void secondPressLogic(char stable_key);
-void update_ui_leds_from_main(char stable_key);
-void save_state_2_logic();
-void init_all_system_pwms();
-void debug_enter_state();
-void debug_system_timer_state();
-void print_pid_dashboard(int target, int current, pid_instance *pid);
-void setTimeIntervals();
-// void pwm_control_servo();
-void destroyList();
-void printConfiguredIntervals();
-// void init_servo_position();
-void init_read_rpm_pwm();
-// void init_pwm_measure_pin(uint gpio_input);
-void setup_clean_test_pwm();
-uint32_t get_pulse_width_ticks(uint gpio_input);
-void run_continuous_servo_sweep();
-// void init_servo_pwm_irq();
-void set_servo_pwm_speed();
-int servo_pulse_width_ms_times_100 = 150; // Global variable to hold the current servo duty cycle, accessible across files
-int target_rpm = 1000;        // Example target RPM for the fan
-uint16_t get_raw_pwm_counter_value();
-extern struct timerInterval *findTimeEntryType();
-struct nv_recovery_t
-{
-    uint32_t magic_number; // Signature validation tag (0xDEADBEEF)
-    uint32_t duty_cycle;   // Fan duty cycle
-    int32_t remaining_days;
-    int32_t remaining_hours;
-    int32_t remaining_minutes;
-    int32_t remaining_seconds;
-    uint8_t padding[232]; // Pads struct to exactly 256 bytes (1 Page)
-};
-
-bool load_state_from_flash(struct nv_recovery_t *state_out);
-uint32_t enter_timed_run_first_state();
-uint32_t enter_timed_run_second_state();
+#include "main.h"
 // ///////////////////////////////////////////////////////////////////
 
 // Bring in your existing init function
@@ -187,25 +8,7 @@ int main()
     stdio_init_all();
 
     // Define global states variables locally for context representation
-    // int remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds;
-    uint32_t current_duty_cycle;
-    struct nv_recovery_t saved_state;
-
-    // if (load_state_from_flash(&saved_state)) {
-    //     printf("Power loss recovery detected! Restoring last operation parameters...\n");
-    //     current_duty_cycle        = saved_state.set_duty;
-    //     remaining_days            = saved_state.remaining_days;
-    //     remaining_hours           = saved_state.remaining_hours;
-    //     remaining_minutes          = saved_state.remaining_minutes;
-    //     remaining_seconds_seconds = saved_state.remaining_seconds;
-    // } else {
-    //     printf("Cold boot identified. Booting up with generic runtime options...\n");
-    //     current_duty_cycle        = 0;
-    //     remaining_days            = 0;
-    //     remaining_hours           = 0;
-    //     remaining_minutes          = 0;
-    //     remaining_seconds_seconds = 0;
-    // }
+    // int remaining_days, remaining_hours, remaining_minutes, remaining_seconds_seconds;    
 
     // Wait 3 seconds after boot so you can open your serial monitor in time
     sleep_ms(3000);
@@ -221,6 +24,10 @@ int main()
     init_timer_subsystem(); // Starts up the Alarm 0 infrastructure safely
     init_read_rpm_pwm();
     init_all_system_pwms();
+    display_init_spi();
+    tft_init();
+
+    menu_init();
 
     // 3. Claim the master DMA channel from the system pool
     dma_master_chan = dma_claim_unused_channel(true);
@@ -253,33 +60,20 @@ int main()
     // This starts the DMA channel first, then releases the ADC clock loop
     start_synchronized_adc_dma();
     setup_clean_test_pwm();
+    sleep_ms(12000); // Allow the system to stabilize before starting I2C scanning
+    init_i2c();
+    i2c_scanner();
+
     for (;;)
     {
-        // run_continuous_servo_sweep();
-        // if (time_reached(next_flash_save_time))
-        // {
-        // // Reset the timer for the next 30 seconds
-        //     next_flash_save_time = make_timeout_time_ms(30000);
-
-        //     printf("Auto-saving state to flash...\n");
-
-        //     // Pass your current live variables into the flash save function
-        //     save_state_to_flash(
-        //         duty_cycle,
-        //         remaining_days,
-        //         remaining_hours,
-        //         remaining_minutes,
-        //         remaining_seconds_seconds
-        //     );
-        // }
         key_event = key_pop();
         if (key_event != 0 && (absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 2000000)) // 50ms && absolute_time_diff_us(last_key_press_time, get_absolute_time()) > 50000
         {
 
             last_key_press_time = get_absolute_time();
             key_char = (char)(key_event & 0xFF);
-            debug_system_timer_state();
-            debug_enter_state();
+            current_button_press = get_button_input(key_char);
+            menu_update();
         }
         else
         {
@@ -347,7 +141,7 @@ int main()
         // set_servo_pwm_speed();
         // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
         // printf("Servo Duty Cycle: %d\n", duty_period[0]);
-        
+
         // switch (current_servo_position)
         // {
         //     case HOLD_90:
@@ -399,7 +193,7 @@ int main()
         //     }
         // }
         // pwm_set_gpio_level(servo_pwm_gpio_pin, (float) servo_pulse_width_ms_times_100 / (SERVO_PERIOD_MS * 100)); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
-        
+
         pwm_set_gpio_level(servo_pwm_gpio_pin, 10); // Scale 100-200us pulse width to 625-1250 level for 10kHz PWM with 125MHz clock and wrap of 125000
         // measure_duty_cycle_period(adc_duty_cycle_result, duty_period);
 
@@ -457,7 +251,7 @@ int main()
         {
             // Sync both variables so your hardware and diagnostic metrics align
             duty_cycle = adc_fan_speed_control[0] * 100 / 4095;
-            pwm_set_gpio_level(fan_spd_control_gpio, duty_cycle); 
+            pwm_set_gpio_level(fan_spd_control_gpio, duty_cycle);
 
             if (key_char == '#')
             {
@@ -519,19 +313,6 @@ int main()
 
             key_char = '\0'; // Clear input flag
             break;
-        // case MODE_MANUAL_ADJUST:
-        //     set_duty = adc_fan_speed_control[0] * 100 / 4095;
-        //     switch (key_char)
-        //     {
-        //     case '#':
-        //         system_timer_state = SEL_TIME_VALS;
-        //         break;
-        //     case 'B':
-        //         system_timer_state = MODE_DEFAULT;
-        //         break;
-        //     }
-        //     // system_timer_state = (key_char == '#') ? SEL_TIME_VALS : (key_char == 'B') ? MODE_DEFAULT
-        //                                                                                : MODE_MANUAL_ADJUST;
         //     break;
         case SEL_TIME_VALS:
             if (!linked_list_set && key_event != 0)
@@ -543,13 +324,6 @@ int main()
             {
                 system_timer_state = timer_interval_head->timer_state;
             }
-
-            // else if (linked_list_set == true && key_char == 'B')
-            // {
-            //     system_timer_state = MODE_DEFAULT;
-            //     destroyList();
-            // }
-
             break;
         case MODE_TIMED_RUN:
             if (absolute_time_diff_us(mode_switch_time_remaining_to_set, get_absolute_time()) >= 1000000)
@@ -622,7 +396,6 @@ int main()
             start_new_blink_sequence();
         }
         current_key_snapshot = first_num_set == true ? last_num_entered : current_key_snapshot;
-        update_ui_leds_from_main(current_key_snapshot);
 
         fflush(stdout);
     }

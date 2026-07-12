@@ -1,10 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-#include "pico/stdlib.h"
-#include "hardware/timer.h"
-#include "hardware/irq.h"
-#include "hardware/adc.h"
-#include "hardware/dma.h"
+#include "read_adc.h"
 
 
 #define NUM_SAMPLES 1000
